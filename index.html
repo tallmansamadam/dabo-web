@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dabo (Browser)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; line-height: 1.35; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; }
+    label { display: block; font-size: 14px; margin-bottom: 6px; }
+    input, button { font: inherit; padding: 10px 12px; }
+    input { width: 260px; }
+    button { cursor: pointer; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 16px; }
+    .muted { color: #555; font-size: 14px; }
+    .ok { color: #0a7; font-weight: 600; }
+    .bad { color: #b00; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid #eee; padding: 10px 8px; text-align: left; }
+    th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: #555; }
+    code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #f6f6f6; font-size: 12px; }
+    .hint { font-size: 13px; color: #666; margin-top: 6px; }
+    .footer { margin-top: 20px; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Dabo</h1>
+  <div class="muted">Three rings stop; you win when symbols align on your chosen slots.</div>
+
+  <div class="card">
+    <div class="row">
+      <div class="grid" style="min-width: 300px;">
+        <div><span class="pill" id="bankrollPill">Bankroll: 1000</span></div>
+        <div class="muted">Unbettable (house-only): <code>5–7</code>, <code>17–19</code>, <code>29–31</code></div>
+      </div>
+
+      <div>
+        <label for="slotsInput">Slots (1–36), pick 1–3 (space or comma separated)</label>
+        <input id="slotsInput" placeholder="e.g. 3 12 21" />
+        <div class="hint" id="slotsHint"></div>
+      </div>
+
+      <div>
+        <label for="betInput">Bet per slot (10–100)</label>
+        <input id="betInput" placeholder="10" />
+        <div class="hint" id="betHint"></div>
+      </div>
+
+      <div>
+        <button id="spinBtn">Spin</button>
+      </div>
+    </div>
+
+    <div id="status" style="margin-top: 12px;"></div>
+    <div id="spinMeta" class="muted" style="margin-top: 10px;"></div>
+
+    <table id="resultsTable" aria-label="results" style="display:none;">
+      <thead>
+        <tr>
+          <th>Slot</th>
+          <th>Ring A</th>
+          <th>Ring B</th>
+          <th>Ring C</th>
+          <th>Match</th>
+          <th>Mult</th>
+          <th>Win</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="footer">
+      Payouts: <code>QUARK+SWIRL+SWIRL</code> = 4000×, 3-kind = 100×, 2-kind = 5×.
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ----------------------------- Config -----------------------------
+  const SLOTS = 36;
+  const MIN_BET = 10;
+  const MAX_BET = 100;
+
+  const UNBETTABLE = new Set([5,6,7,17,18,19,29,30,31]);
+
+  const SYMBOLS = {
+    BAR: 'BAR',
+    ORB: 'ORB',
+    COMET: 'COMET',
+    BOLT: 'BOLT',
+    MOON: 'MOON',
+    SUN: 'SUN',
+    SWIRL: 'SWIRL',
+    DS9: 'DS9',
+    QUARK: 'QUARK',
+  };
+
+  const COMMON_PATTERN = [
+    SYMBOLS.BAR, SYMBOLS.ORB, SYMBOLS.COMET, SYMBOLS.BOLT,
+    SYMBOLS.MOON, SYMBOLS.SUN, SYMBOLS.BOLT, SYMBOLS.ORB,
+  ];
+
+  function buildRing(seedShift = 0) {
+    const ring = Array.from({ length: SLOTS }, (_, i) => COMMON_PATTERN[(i + seedShift) % COMMON_PATTERN.length]);
+
+    // Special icons (1-based)
+    ring[17 - 1] = SYMBOLS.QUARK;
+    ring[8 - 1]  = SYMBOLS.SWIRL;
+    ring[28 - 1] = SYMBOLS.SWIRL;
+    ring[11 - 1] = SYMBOLS.DS9;
+    ring[22 - 1] = SYMBOLS.DS9;
+    ring[34 - 1] = SYMBOLS.DS9;
+
+    return ring;
+  }
+
+  const RING_A = buildRing(0);
+  const RING_B = buildRing(3);
+  const RING_C = buildRing(5);
+
+  // -------------------------- Game Mechanics ------------------------
+  // Browser-safe randomness
+  function randInt(minInclusive, maxExclusive) {
+    // crypto.getRandomValues gives stronger randomness than Math.random()
+    const range = maxExclusive - minInclusive;
+    const maxUint = 0xFFFFFFFF;
+    const limit = maxUint - (maxUint % range);
+
+    const buf = new Uint32Array(1);
+    let x;
+    do {
+      crypto.getRandomValues(buf);
+      x = buf[0];
+    } while (x >= limit);
+
+    return minInclusive + (x % range);
+  }
+
+  function spinOffsets() {
+    return {
+      a: randInt(0, SLOTS),
+      b: randInt(0, SLOTS),
+      c: randInt(0, SLOTS),
+    };
+  }
+
+  function symbolsAtSlot(slot1Based, offsets) {
+    const i = (slot1Based - 1) % SLOTS;
+    const sa = RING_A[(i + offsets.a) % SLOTS];
+    const sb = RING_B[(i + offsets.b) % SLOTS];
+    const sc = RING_C[(i + offsets.c) % SLOTS];
+    return [sa, sb, sc];
+  }
+
+  function payoutMultiplier([sa, sb, sc]) {
+    const trio = [sa, sb, sc].slice().sort();
+    const sorted = trio.join('|');
+
+    if (sorted === [SYMBOLS.QUARK, SYMBOLS.SWIRL, SYMBOLS.SWIRL].sort().join('|')) return 4000;
+    if (sa === sb && sb === sc) return 100;
+    if (sa === sb || sa === sc || sb === sc) return 5;
+    return 0;
+  }
+
+  function isBettable(slot1Based) {
+    return slot1Based >= 1 && slot1Based <= SLOTS && !UNBETTABLE.has(slot1Based);
+  }
+
+  function parseSlots(raw) {
+    const parts = raw.split(/[\s,]+/).filter(Boolean);
+    const nums = parts.map(p => Number(p)).filter(n => Number.isFinite(n) && Number.isInteger(n));
+    const unique = [...new Set(nums)];
+    return unique.sort((a,b) => a-b);
+  }
+
+  // ------------------------------ UI --------------------------------
+  let bankroll = 1000;
+
+  const el = {
+    bankrollPill: document.getElementById('bankrollPill'),
+    slotsInput: document.getElementById('slotsInput'),
+    betInput: document.getElementById('betInput'),
+    spinBtn: document.getElementById('spinBtn'),
+    status: document.getElementById('status'),
+    spinMeta: document.getElementById('spinMeta'),
+    resultsTable: document.getElementById('resultsTable'),
+    tbody: document.querySelector('#resultsTable tbody'),
+    slotsHint: document.getElementById('slotsHint'),
+    betHint: document.getElementById('betHint'),
+  };
+
+  function setStatus(msg, kind = 'muted') {
+    el.status.className = kind;
+    el.status.textContent = msg;
+  }
+
+  function updateBankroll() {
+    el.bankrollPill.textContent = `Bankroll: ${bankroll}`;
+    const maxAffordable = Math.floor(bankroll / 1);
+    el.betHint.textContent = `Your bankroll supports up to ${maxAffordable} total stake.`;
+  }
+
+  function validateInputs() {
+    const slots = parseSlots(el.slotsInput.value.trim());
+    if (slots.length < 1 || slots.length > 3) {
+      el.slotsHint.textContent = 'Pick 1–3 unique slots.';
+      return { ok: false, reason: 'Pick 1–3 unique slots.' };
+    }
+    if (!slots.every(isBettable)) {
+      el.slotsHint.textContent = 'One or more slots are invalid/unbettable.';
+      return { ok: false, reason: 'One or more slots are invalid/unbettable.' };
+    }
+    el.slotsHint.textContent = `Selected: ${slots.join(', ')}`;
+
+    const betRaw = el.betInput.value.trim();
+    const bet = betRaw === '' ? MIN_BET : Number(betRaw);
+    if (!Number.isFinite(bet) || !Number.isInteger(bet)) {
+      el.betHint.textContent = 'Bet must be a whole number.';
+      return { ok: false, reason: 'Bet must be a whole number.' };
+    }
+
+    const maxAffordablePerSlot = Math.floor(bankroll / slots.length);
+    const effectiveMax = Math.min(MAX_BET, maxAffordablePerSlot);
+
+    if (bet < MIN_BET || bet > effectiveMax) {
+      el.betHint.textContent = `Bet per slot must be ${MIN_BET}–${effectiveMax} (based on bankroll).`;
+      return { ok: false, reason: 'Bet out of range.' };
+    }
+
+    el.betHint.textContent = `Total stake: ${bet * slots.length}.`;
+    return { ok: true, slots, bet };
+  }
+
+  function renderResults(rows) {
+    el.tbody.innerHTML = '';
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.slot}</td>
+        <td>${r.sa}</td>
+        <td>${r.sb}</td>
+        <td>${r.sc}</td>
+        <td>${r.match}</td>
+        <td>${r.mult}</td>
+        <td>${r.win}</td>
+      `;
+      el.tbody.appendChild(tr);
+    }
+    el.resultsTable.style.display = '';
+  }
+
+  function matchLabel(mult) {
+    if (mult === 4000) return 'JACK';
+    if (mult === 100) return '3K';
+    if (mult === 5) return '2K';
+    return '--';
+  }
+
+  function spin() {
+    const v = validateInputs();
+    if (!v.ok) {
+      setStatus(v.reason, 'bad');
+      return;
+    }
+
+    const { slots, bet } = v;
+    const stake = bet * slots.length;
+    bankroll -= stake;
+
+    const offsets = spinOffsets();
+    const rows = [];
+    let totalWin = 0;
+
+    for (const slot of slots) {
+      const [sa, sb, sc] = symbolsAtSlot(slot, offsets);
+      const mult = payoutMultiplier([sa, sb, sc]);
+      const win = bet * mult;
+      totalWin += win;
+
+      rows.push({
+        slot,
+        sa, sb, sc,
+        mult,
+        win,
+        match: matchLabel(mult),
+      });
+    }
+
+    bankroll += totalWin;
+
+    el.spinMeta.textContent = `Offsets: A=${offsets.a}, B=${offsets.b}, C=${offsets.c} — Staked ${stake}, Won ${totalWin}, Net ${totalWin - stake}`;
+    renderResults(rows);
+
+    if (totalWin > 0) setStatus('DABO! 💰', 'ok');
+    else setStatus('No hits — spin again.', 'muted');
+
+    if (bankroll < MIN_BET) {
+      setStatus('You’re out of spending money. Refresh to restart.', 'bad');
+      el.spinBtn.disabled = true;
+    }
+
+    updateBankroll();
+  }
+
+  el.spinBtn.addEventListener('click', spin);
+  el.slotsInput.addEventListener('input', () => { validateInputs(); });
+  el.betInput.addEventListener('input', () => { validateInputs(); });
+
+  // init
+  updateBankroll();
+  setStatus('Enter slots + bet, then Spin.', 'muted');
+})();
+</script>
+</body>
+</html>
+
