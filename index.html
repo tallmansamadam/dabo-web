@@ -3,43 +3,59 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Dabo // Ferengi Terminal</title>
+  <title>Dabo // Ferengi Wheel</title>
 
   <!--
-    Dabo Ferengi Web (single-file app)
-    - Click-only slot selection via ruler + chips (no redundant text entry).
-    - 3 rings: cruise -> decelerate -> deterministic stop, A then B then C.
-    - Responsive layout: clamp sizing, wrapping, ruler scroll, reduced-motion support.
+    ==========================================================
+    DABO — FERENGI WHEEL UI (Single-file static web app)
+    ==========================================================
+    Goals solved in this revision:
+      1) Wheel is a real top-down view: 3 concentric rings + outer slot ring.
+      2) No "Ring A/B/C" labels: the wheel speaks for itself visually.
+      3) No redundant slot input: slot selection is click/tap on wheel only.
+      4) Responsiveness/wrapping: layout uses min-width:0, clamp(), and safe wrapping.
+      5) House-only slots: distinct background and high-contrast numbers for readability.
+
+    How the wheel works:
+      - There are 36 slots. Each ring is a 36-element symbol array.
+      - A "spin" selects offsets (0..35) for each ring.
+      - For slot N (1-based), symbol = ring[(N - 1 + offset) % 36].
+      - Visually, each ring rotates COUNTERCLOCKWISE by offset*(360/36)=offset*10 degrees,
+        so the mapping matches the formula above.
+
+    Accessibility:
+      - If prefers-reduced-motion is enabled, animation snaps directly to result.
+
+    Deployment:
+      - Static host (Netlify): no build command, publish root.
   -->
 
   <style>
     :root{
-      /* Base terminal palette */
       --bg0:#060707;
       --bg1:#0a0c0b;
-      --ink:#b7ffbf;           /* phosphor */
+      --panel:#0b120f;
+      --ink:#b7ffbf;
       --ink2:#7bff8f;
       --warn:#ffd07a;
       --bad:#ff7a7a;
 
-      /* Brass accents */
       --brass2:#d2a84b;
       --brass3:#f7d57e;
 
-      /* Grid glow */
-      --grid: rgba(90, 180, 120, 0.08);
-      --glow: 0 0 10px rgba(120,255,160,0.25), 0 0 30px rgba(120,255,160,0.09);
+      /* House-only (unbettable) contrast */
+      --houseFill: rgba(255, 208, 122, 0.22);
+      --houseStroke: rgba(255, 208, 122, 0.55);
+      --houseText: rgba(255, 245, 220, 0.98);
 
-      /* Responsive sizing primitives */
-      --cell: clamp(26px, 3.2vw, 48px); /* per-symbol cell size */
-      --gap: clamp(4px, 0.8vw, 8px);
-
+      /* Responsive typography and spacing */
       --radius: 16px;
+      --gap: clamp(10px, 2.2vw, 16px);
 
-      /* House-only (unbettable) contrast colors */
-      --houseBg: rgba(255, 208, 122, 0.18);
-      --houseBorder: rgba(255, 208, 122, 0.38);
-      --houseText: rgba(255, 236, 190, 0.95);
+      /* Wheel size behavior:
+         - wheel container uses aspect-ratio:1 so it stays a circle.
+         - svg scales automatically with width. */
+      --wheelMax: 680px;
     }
 
     *{ box-sizing:border-box; }
@@ -55,13 +71,12 @@
       overflow-x:hidden;
     }
 
-    /* Wrapping rules so long text doesn't blow out divs */
-    .wrap, .panel, .muted, .monoSmall { overflow-wrap:anywhere; word-break: normal; }
+    /* Global wrapping safety: prevents long strings from overflow */
+    .wrap, .panel, .muted, .monoSmall, .pill { overflow-wrap:anywhere; min-width:0; }
 
     .wrap{ max-width: 1120px; margin: 22px auto; padding: 0 16px 40px; }
 
     .frame{
-      position:relative;
       border-radius: 26px;
       padding: 14px;
       background:
@@ -75,99 +90,82 @@
     .terminal{
       position:relative;
       border-radius: 18px;
-      padding: 18px;
-      background:
-        linear-gradient(180deg, rgba(10,24,18,0.92), rgba(6,12,9,0.92));
+      padding: clamp(14px, 2vw, 18px);
+      background: linear-gradient(180deg, rgba(10,24,18,0.92), rgba(6,12,9,0.92));
       box-shadow:
         inset 0 0 0 1px rgba(120,255,160,0.12),
         inset 0 0 40px rgba(0,0,0,0.6);
       overflow:hidden;
-      min-width: 0;
     }
 
-    /* scanlines + subtle CRT shimmer */
+    /* CRT scanlines */
     .terminal:before{
       content:"";
       position:absolute; inset:0;
-      background:
-        repeating-linear-gradient(
-          to bottom,
-          rgba(255,255,255,0.05) 0px,
-          rgba(255,255,255,0.03) 1px,
-          rgba(0,0,0,0.00) 2px,
-          rgba(0,0,0,0.00) 5px
-        );
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,0.05) 0px,
+        rgba(255,255,255,0.03) 1px,
+        rgba(0,0,0,0.00) 2px,
+        rgba(0,0,0,0.00) 5px
+      );
       opacity:0.10;
       pointer-events:none;
-    }
-    .terminal:after{
-      content:"";
-      position:absolute; inset:-40px;
-      background:
-        radial-gradient(closest-side at 30% 40%, rgba(120,255,160,0.08), transparent 60%),
-        radial-gradient(closest-side at 70% 30%, rgba(210,168,75,0.08), transparent 65%);
-      animation: shimmer 7s ease-in-out infinite alternate;
-      pointer-events:none;
-      opacity:0.9;
-    }
-    @keyframes shimmer{
-      from{ transform: translate3d(-8px,-4px,0); filter: blur(0px); }
-      to{ transform: translate3d(10px,8px,0); filter: blur(0.6px); }
     }
 
     .topbar{
       display:flex;
-      gap:12px;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: 14px;
       position:relative;
       z-index:2;
     }
+
     .title{
       display:flex;
-      gap:10px;
-      align-items:baseline;
-      flex-wrap:wrap;
-      text-shadow: var(--glow);
+      gap: 10px;
+      align-items: baseline;
+      flex-wrap: wrap;
       min-width: 0;
+      text-shadow: 0 0 10px rgba(120,255,160,0.25);
     }
     .title h1{
       margin:0;
-      font-size: clamp(18px, 2.1vw, 24px);
-      letter-spacing: 0.10em;
       font-weight: 900;
+      letter-spacing: 0.10em;
+      font-size: clamp(18px, 2.1vw, 24px);
     }
     .subtitle{
       font-size: 12px;
-      color: rgba(183,255,191,0.75);
       letter-spacing: 0.09em;
+      color: rgba(183,255,191,0.75);
     }
 
     .statusrow{
       display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
       min-width: 0;
     }
 
     .pill{
       display:inline-flex;
-      gap:10px;
-      align-items:center;
+      gap: 10px;
+      align-items: center;
       padding: 8px 12px;
       border-radius: 999px;
       background: linear-gradient(180deg, rgba(120,255,160,0.10), rgba(120,255,160,0.04));
       box-shadow: inset 0 0 0 1px rgba(120,255,160,0.16);
       font-size: 12px;
-      letter-spacing:0.06em;
+      letter-spacing: 0.06em;
       user-select:none;
       min-width: 0;
     }
-    .pill strong{ color: var(--ink2); }
     .pillBrass{
       background: linear-gradient(180deg, rgba(210,168,75,0.22), rgba(210,168,75,0.08));
       box-shadow: inset 0 0 0 1px rgba(210,168,75,0.28);
@@ -176,10 +174,7 @@
     .grid{
       display:grid;
       grid-template-columns: 1.25fr 0.75fr;
-      gap: 14px;
-      margin-top: 14px;
-      position:relative;
-      z-index:2;
+      gap: var(--gap);
       min-width: 0;
     }
     @media (max-width: 980px){
@@ -189,27 +184,12 @@
     .panel{
       border-radius: var(--radius);
       padding: 14px;
-      background:
-        linear-gradient(180deg, rgba(10,22,16,0.80), rgba(8,14,11,0.82));
+      background: linear-gradient(180deg, rgba(10,22,16,0.80), rgba(8,14,11,0.82));
       box-shadow:
         inset 0 0 0 1px rgba(120,255,160,0.10),
         0 10px 30px rgba(0,0,0,0.35);
-      position:relative;
       overflow:hidden;
       min-width: 0;
-    }
-    .panel:before{
-      content:"";
-      position:absolute; inset:0;
-      background: linear-gradient(90deg, transparent, rgba(90,180,120,0.12), transparent);
-      opacity:0.25;
-      transform: translateX(-60%);
-      animation: sweep 9s linear infinite;
-      pointer-events:none;
-    }
-    @keyframes sweep{
-      0%{ transform: translateX(-60%); }
-      100%{ transform: translateX(120%); }
     }
 
     .panel h2{
@@ -219,18 +199,14 @@
       text-transform: uppercase;
       color: rgba(183,255,191,0.82);
     }
+
     .muted{ color: rgba(183,255,191,0.68); font-size: 12px; line-height: 1.4; }
+    .monoSmall{ font-size: 11px; letter-spacing:0.10em; color: rgba(183,255,191,0.82); }
     .warn{ color: var(--warn); }
     .bad{ color: var(--bad); }
     .ok{ color: var(--ink2); }
 
-    label{
-      display:block;
-      margin: 10px 0 6px;
-      font-size: 12px;
-      letter-spacing:0.08em;
-      color: rgba(183,255,191,0.85);
-    }
+    label{ display:block; margin: 10px 0 6px; font-size: 12px; letter-spacing:0.08em; color: rgba(183,255,191,0.85); }
     input, button{
       font: inherit;
       padding: 10px 12px;
@@ -243,15 +219,10 @@
       min-width: 0;
     }
     input::placeholder{ color: rgba(183,255,191,0.35); }
-    input:focus{
-      border-color: rgba(120,255,160,0.40);
-      box-shadow: 0 0 0 3px rgba(120,255,160,0.08), inset 0 0 0 1px rgba(0,0,0,0.35);
-    }
     button{
       cursor:pointer;
       border-color: rgba(210,168,75,0.35);
-      background:
-        linear-gradient(180deg, rgba(210,168,75,0.22), rgba(210,168,75,0.08));
+      background: linear-gradient(180deg, rgba(210,168,75,0.22), rgba(210,168,75,0.08));
       box-shadow:
         inset 0 0 0 1px rgba(0,0,0,0.35),
         0 8px 18px rgba(0,0,0,0.35);
@@ -260,205 +231,16 @@
       font-weight: 900;
       white-space: nowrap;
     }
-    button:hover{ filter: brightness(1.06); }
     button:disabled{ cursor:not-allowed; opacity:0.55; filter: saturate(0.7); }
 
-    /* Wheel wrapper */
-    .wheelWrap{
-      border-radius: 18px;
-      background:
-        linear-gradient(180deg, rgba(210,168,75,0.12), rgba(0,0,0,0) 35%),
-        linear-gradient(180deg, rgba(8,18,13,0.70), rgba(5,10,7,0.72));
-      box-shadow:
-        inset 0 0 0 1px rgba(247,213,126,0.20),
-        inset 0 0 30px rgba(0,0,0,0.6),
-        0 10px 30px rgba(0,0,0,0.35);
-      overflow:hidden;
-      position:relative;
-      min-width: 0;
-    }
-    .wheelHeader{
-      padding: 12px 12px 8px;
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:12px;
-      border-bottom: 1px solid rgba(120,255,160,0.12);
-      position:relative;
-      flex-wrap: wrap;
-      min-width: 0;
-    }
-    .wheelHeader .muted{ font-size: 11px; letter-spacing:0.08em; }
-
-    /* Slot ruler:
-       - On wide viewports, it looks like a neat 36-step line.
-       - On narrow viewports, it becomes horizontally scrollable to keep text legible. */
-    .slotRulerWrap{
-      overflow-x: auto;
-      overflow-y: hidden;
-      -webkit-overflow-scrolling: touch;
-      border-bottom: 1px dashed rgba(120,255,160,0.10);
-    }
-
-    .slotRuler{
-      display:flex;
-      gap: 0;
-      padding: 8px 10px 0;
-      font-size: 10px;
-      color: rgba(183,255,191,0.60);
-      user-select:none;
-      min-width: max-content; /* keep buttons readable; scroll if needed */
-    }
-    .slotRuler button{
-      all: unset;
-      cursor:pointer;
-      text-align:center;
-      padding: 2px 0 10px;
-      width: clamp(18px, 2.2vw, 28px);
-      position:relative;
-      color: inherit;
-      border-radius: 8px 8px 0 0;
-      transition: transform 120ms ease, filter 120ms ease, background 120ms ease;
-      scroll-snap-align: start;
-    }
-    .slotRuler button:hover{
-      filter: brightness(1.1);
-      transform: translateY(-1px);
-      background: rgba(120,255,160,0.05);
-    }
-
-    /* House-only ruler buttons: higher-contrast background so numbers are readable */
-    .slotRuler button.house{
-      cursor:not-allowed;
-      color: var(--houseText);
-      background: var(--houseBg);
-      box-shadow: inset 0 0 0 1px var(--houseBorder);
-      transform:none !important;
-      filter:none !important;
-    }
-
-    .slotRuler button.selected{
-      color: rgba(247,213,126,0.98);
-      background: rgba(210,168,75,0.14);
-      box-shadow: inset 0 0 0 1px rgba(210,168,75,0.22);
-    }
-    .slotRuler button.selected::after{
-      content:"";
-      position:absolute; left:50%; bottom:-2px;
-      width:0; height:0;
-      border-left: 6px solid transparent;
-      border-right:6px solid transparent;
-      border-top: 7px solid rgba(210,168,75,0.85);
-      transform: translateX(-50%);
-      filter: drop-shadow(0 0 6px rgba(210,168,75,0.3));
-    }
-
-    .window{ position:relative; overflow:hidden; padding: 10px; min-width: 0; }
-    .ringRow{ display:flex; align-items:center; gap: 10px; margin: 10px 0; min-width: 0; }
-    .ringLabel{
-      width: 86px;
-      flex: 0 0 auto;
-      font-size: 12px;
-      letter-spacing:0.12em;
-      text-transform: uppercase;
-      color: rgba(183,255,191,0.75);
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-    }
-    .ringLabel b{ color: rgba(247,213,126,0.85); font-weight: 900; }
-
-    .viewport{
-      flex: 1 1 auto;
-      min-width: 0;
-      overflow:hidden;
-      border-radius: 14px;
-      background: linear-gradient(180deg, rgba(0,0,0,0.32), rgba(0,0,0,0.18));
-      box-shadow:
-        inset 0 0 0 1px rgba(120,255,160,0.10),
-        inset 0 0 18px rgba(0,0,0,0.55);
-      position:relative;
-    }
-    .viewport:before{
-      content:"";
-      position:absolute; inset:0;
-      background:
-        repeating-linear-gradient(90deg, var(--grid) 0px, var(--grid) 1px, transparent 1px, transparent 24px);
-      opacity:0.25;
-      pointer-events:none;
-    }
-
-    .track{
-      display:flex;
-      width:max-content;
-      will-change: transform;
-      transform: translate3d(0,0,0);
-      padding: 10px 10px;
-      gap: var(--gap);
-    }
-
-    .cell{
-      width: var(--cell);
-      height: calc(var(--cell) * 0.92);
-      border-radius: 12px;
-      border: 1px solid rgba(120,255,160,0.12);
-      background: linear-gradient(180deg, rgba(120,255,160,0.08), rgba(0,0,0,0.18));
-      box-shadow:
-        inset 0 0 0 1px rgba(0,0,0,0.35),
-        0 3px 12px rgba(0,0,0,0.35);
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap: 2px;
-      user-select:none;
-      position:relative;
-      flex: 0 0 auto;
-    }
-    .cell .g{ font-size: 16px; filter: drop-shadow(0 0 10px rgba(120,255,160,0.15)); }
-    .cell .t{ font-size: 10px; color: rgba(183,255,191,0.75); letter-spacing:0.06em; }
-
-    /* House-only cells: match ruler contrast */
-    .cell.house{
-      background: linear-gradient(180deg, rgba(255,208,122,0.18), rgba(0,0,0,0.18));
-      border-color: rgba(255,208,122,0.24);
-    }
-    .cell.house .t{ color: rgba(255,236,190,0.90); }
-
-    .cell.selected{
-      border-color: rgba(210,168,75,0.50);
-      box-shadow:
-        inset 0 0 0 1px rgba(0,0,0,0.35),
-        0 0 0 2px rgba(210,168,75,0.22),
-        0 8px 22px rgba(210,168,75,0.14);
-    }
-
-    .results{
-      margin-top: 12px;
-      border-top: 1px solid rgba(120,255,160,0.12);
-      padding-top: 12px;
-      min-width: 0;
-    }
-
-    table{ width:100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
-    th, td{ padding: 10px 8px; border-bottom: 1px solid rgba(120,255,160,0.10); text-align:left; }
-    th{
-      text-transform: uppercase;
-      letter-spacing:0.10em;
-      color: rgba(183,255,191,0.70);
-      font-size: 11px;
-    }
-
-    .monoSmall{ font-size: 11px; letter-spacing:0.10em; color: rgba(183,255,191,0.82); }
-    .ctaRow{ display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; min-width: 0; }
+    .ctaRow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 
     .chips{
       display:flex;
       flex-wrap:wrap;
       gap: 8px;
-      margin-top: 10px;
+      margin-top: 8px;
       min-height: 28px;
-      min-width: 0;
     }
     .chip{
       display:inline-flex;
@@ -483,12 +265,59 @@
       background: rgba(0,0,0,0.25);
       border: 1px solid rgba(210,168,75,0.25);
     }
-    .chip button:hover{ filter: brightness(1.1); }
 
-    /* Accessibility: reduced motion */
+    /* Wheel container: stays circular and scales responsibly */
+    .wheelShell{
+      display:grid;
+      place-items:center;
+      width: 100%;
+      max-width: var(--wheelMax);
+      margin: 0 auto;
+      aspect-ratio: 1;
+    }
+    svg#wheelSvg{
+      width: 100%;
+      height: 100%;
+      display:block;
+    }
+
+    /* SVG styling (strokes and text) */
+    .slotWedge{ cursor:pointer; }
+    .slotWedge.house{ cursor:not-allowed; }
+
+    .slotText{
+      font-size: 14px;
+      fill: rgba(183,255,191,0.85);
+      paint-order: stroke;
+      stroke: rgba(0,0,0,0.55);
+      stroke-width: 3px;
+      stroke-linejoin: round;
+      user-select:none;
+    }
+    .slotText.house{
+      fill: var(--houseText);
+      stroke: rgba(0,0,0,0.65);
+    }
+
+    .slotWedge.selected path{
+      stroke: rgba(247,213,126,0.75) !important;
+      stroke-width: 2.5 !important;
+      filter: drop-shadow(0 0 10px rgba(247,213,126,0.18));
+    }
+
+    .symbolGlyph{
+      font-size: 18px;
+      fill: rgba(183,255,191,0.92);
+      paint-order: stroke;
+      stroke: rgba(0,0,0,0.55);
+      stroke-width: 3px;
+      stroke-linejoin: round;
+      user-select:none;
+    }
+
+    /* Reduced motion */
     @media (prefers-reduced-motion: reduce){
-      .terminal:after{ animation: none !important; }
-      .panel:before{ animation: none !important; }
+      *{ scroll-behavior: auto !important; }
     }
   </style>
 </head>
@@ -496,12 +325,12 @@
 <body>
   <div class="wrap">
     <div class="frame">
-      <div class="terminal" id="terminal">
+      <div class="terminal">
 
         <div class="topbar">
           <div class="title">
             <h1>DABO</h1>
-            <div class="subtitle">QUARK’S CHANCE ENGINE // FERENGI GAMING TERMINAL</div>
+            <div class="subtitle">TOP-DOWN WHEEL // FERENGI GAMING TERMINAL</div>
           </div>
           <div class="statusrow">
             <div class="pill pillBrass">LATINUM: <strong id="bankrollVal">1000</strong></div>
@@ -510,54 +339,64 @@
         </div>
 
         <div class="grid">
-          <!-- Wheel panel -->
           <div class="panel">
             <h2>Wheel</h2>
 
-            <div class="wheelWrap">
-              <div class="wheelHeader">
-                <div class="muted">
-                  SELECT 1–3 SLOTS (HOUSE-ONLY: <span class="warn">5–7</span>, <span class="warn">17–19</span>, <span class="warn">29–31</span>)
-                </div>
-                <div class="muted">
-                  Click slot numbers to toggle selection.
-                </div>
-              </div>
-
-              <div class="slotRulerWrap">
-                <div class="slotRuler" id="slotRuler" aria-label="Slot selector"></div>
-              </div>
-
-              <div class="window">
-                <div class="ringRow">
-                  <div class="ringLabel"><span>RING</span><b>A</b></div>
-                  <div class="viewport"><div class="track" id="trackA"></div></div>
-                </div>
-                <div class="ringRow">
-                  <div class="ringLabel"><span>RING</span><b>B</b></div>
-                  <div class="viewport"><div class="track" id="trackB"></div></div>
-                </div>
-                <div class="ringRow">
-                  <div class="ringLabel"><span>RING</span><b>C</b></div>
-                  <div class="viewport"><div class="track" id="trackC"></div></div>
-                </div>
-              </div>
+            <div class="muted" id="hintLine">
+              Tap/click slot numbers to select (1–3). House-only slots are shaded and disabled.
             </div>
 
-            <div class="results">
+            <div class="wheelShell" aria-label="Dabo wheel">
+              <!--
+                SVG wheel:
+                  - Outer ring = slot numbers (fixed, clickable)
+                  - 3 inner rings = symbols, each rotates independently
+                  - Pointer at top indicates the "read" position
+              -->
+              <svg id="wheelSvg" viewBox="0 0 600 600" role="img" aria-label="Dabo wheel">
+                <!-- Background glow -->
+                <defs>
+                  <radialGradient id="wheelGlow" cx="50%" cy="45%" r="60%">
+                    <stop offset="0%" stop-color="rgba(120,255,160,0.08)"/>
+                    <stop offset="60%" stop-color="rgba(0,0,0,0)"/>
+                  </radialGradient>
+                </defs>
+                <rect x="0" y="0" width="600" height="600" fill="url(#wheelGlow)"></rect>
+
+                <!-- Outer rim -->
+                <circle cx="300" cy="300" r="285" fill="rgba(0,0,0,0.18)" stroke="rgba(247,213,126,0.22)" stroke-width="3"></circle>
+
+                <!-- Slot ring (clickable) gets generated into this group -->
+                <g id="slotRing"></g>
+
+                <!-- Symbol rings (generated wedges + glyph text) -->
+                <g id="ringA"></g>
+                <g id="ringB"></g>
+                <g id="ringC"></g>
+
+                <!-- Center hub -->
+                <circle cx="300" cy="300" r="70" fill="rgba(0,0,0,0.35)" stroke="rgba(120,255,160,0.14)" stroke-width="2"></circle>
+                <text x="300" y="305" text-anchor="middle" class="symbolGlyph" style="font-size:20px; letter-spacing:0.18em;">DABO</text>
+
+                <!-- Pointer (top) -->
+                <polygon points="300,18 290,38 310,38" fill="rgba(247,213,126,0.85)" stroke="rgba(0,0,0,0.6)" stroke-width="2"></polygon>
+              </svg>
+            </div>
+
+            <div style="margin-top:12px;">
               <div id="statusLine" class="monoSmall">SELECT SLOTS, ENTER BET, THEN SPIN.</div>
               <div id="spinMeta" class="muted" style="margin-top:8px;"></div>
 
-              <table id="resultsTable" style="display:none;">
+              <table id="resultsTable" style="display:none; width:100%; border-collapse:collapse; margin-top:10px; font-size:12px;">
                 <thead>
                   <tr>
-                    <th>Slot</th>
-                    <th>Ring A</th>
-                    <th>Ring B</th>
-                    <th>Ring C</th>
-                    <th>Match</th>
-                    <th>Mult</th>
-                    <th>Win</th>
+                    <th style="text-align:left; padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">Slot</th>
+                    <th style="text-align:left; padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">A</th>
+                    <th style="text-align:left; padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">B</th>
+                    <th style="text-align:left; padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">C</th>
+                    <th style="text-align:left; padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">Match</th>
+                    <th style="text-align:left; padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">Mult</th>
+                    <th style="text-align:left; padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">Win</th>
                   </tr>
                 </thead>
                 <tbody id="resultsBody"></tbody>
@@ -565,7 +404,6 @@
             </div>
           </div>
 
-          <!-- Controls panel -->
           <div class="panel">
             <h2>Controls</h2>
 
@@ -580,11 +418,11 @@
             <div class="ctaRow" style="margin-top:12px;">
               <button id="spinBtn">Spin</button>
               <button id="clearBtn">Clear</button>
-              <button id="resetBtn" title="Reset bankroll + wheel state">Reset</button>
+              <button id="resetBtn">Reset</button>
             </div>
 
             <div class="muted" style="margin-top: 14px;">
-              Note: If your system has “Reduce Motion” enabled, the wheel will snap to the result.
+              Reduce Motion enabled? The wheel will snap to results automatically.
             </div>
           </div>
         </div>
@@ -598,19 +436,19 @@
   'use strict';
 
   /**
-   * ============================
-   *  DABO: Core configuration
-   * ============================
+   * ==========================================================
+   * Constants / configuration
+   * ==========================================================
    */
-
   const SLOTS = 36;
+  const STEP_DEG = 360 / SLOTS; // 10 degrees per slot
   const MIN_BET = 10;
   const MAX_BET = 100;
 
-  // House-only slots (unbettable). UI renders these differently and disables them.
+  // House-only slots are unbettable; they get special styling.
   const UNBETTABLE = new Set([5,6,7,17,18,19,29,30,31]);
 
-  // Symbol names (logic). UI glyphs are mapped separately to keep logic stable.
+  // Symbols (logic) and glyphs (presentation).
   const SYMBOLS = {
     BAR: 'BAR',
     ORB: 'ORB',
@@ -623,7 +461,7 @@
     QUARK: 'QUARK',
   };
 
-  // Glyphs (presentation). Keep them simple for cross-platform font support.
+  // Keep glyphs simple for cross-platform rendering.
   const GLYPH = {
     BAR: '▮▮',
     ORB: '●',
@@ -636,20 +474,19 @@
     QUARK:'Q',
   };
 
-  // A simple repeating base pattern (you can tune this later).
+  /**
+   * A base repeating pattern. We then "seed shift" per ring and inject specials.
+   * This is deliberately easy to tune later.
+   */
   const COMMON_PATTERN = [
     SYMBOLS.BAR, SYMBOLS.ORB, SYMBOLS.COMET, SYMBOLS.BOLT,
     SYMBOLS.MOON, SYMBOLS.SUN, SYMBOLS.BOLT, SYMBOLS.ORB,
   ];
 
-  /**
-   * Build a 36-symbol ring with a shift to differentiate ring A/B/C.
-   * Also inject a few special icons at fixed positions (1-based indices).
-   */
   function buildRing(seedShift = 0) {
     const ring = Array.from({ length: SLOTS }, (_, i) => COMMON_PATTERN[(i + seedShift) % COMMON_PATTERN.length]);
 
-    // Special icons (1-based placement)
+    // Special placements (1-based positions)
     ring[17 - 1] = SYMBOLS.QUARK;
     ring[8  - 1] = SYMBOLS.SWIRL;
     ring[28 - 1] = SYMBOLS.SWIRL;
@@ -665,12 +502,10 @@
   const RING_C = buildRing(5);
 
   /**
-   * ============================
-   *  Randomness utilities
-   * ============================
-   *
-   * We prefer WebCrypto when available. If a very old browser lacks it,
-   * we fall back to Math.random. (Modern browsers support crypto.getRandomValues.)
+   * ==========================================================
+   * Randomness
+   * ==========================================================
+   * Prefer WebCrypto; fall back to Math.random if needed.
    */
   function randInt(minInclusive, maxExclusive) {
     const range = maxExclusive - minInclusive;
@@ -688,63 +523,19 @@
         } while (x >= limit);
         return minInclusive + (x % range);
       }
-    } catch (_) {
-      // fall through to Math.random
-    }
-
+    } catch (_) {}
     return minInclusive + Math.floor(Math.random() * range);
   }
 
-  /**
-   * ============================
-   *  Game mechanics
-   * ============================
-   */
-
-  function isBettable(slot1Based) {
-    return slot1Based >= 1 && slot1Based <= SLOTS && !UNBETTABLE.has(slot1Based);
+  function prefersReducedMotion() {
+    return globalThis.matchMedia && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   /**
-   * Given ring stop offsets and a slot number N (1-based),
-   * return the 3 symbols visible on that slot for rings A/B/C.
+   * ==========================================================
+   * DOM bindings
+   * ==========================================================
    */
-  function symbolsAtSlot(slot1Based, offsets) {
-    const i = (slot1Based - 1) % SLOTS;
-    const sa = RING_A[(i + offsets.a) % SLOTS];
-    const sb = RING_B[(i + offsets.b) % SLOTS];
-    const sc = RING_C[(i + offsets.c) % SLOTS];
-    return [sa, sb, sc];
-  }
-
-  /**
-   * Payout multipliers:
-   * - Jackpot: QUARK + SWIRL + SWIRL (any order): 4000x
-   * - 3 of a kind: 100x
-   * - 2 of a kind: 5x
-   */
-  function payoutMultiplier([sa, sb, sc]) {
-    const trio = [sa, sb, sc].slice().sort().join('|');
-    const jackpot = [SYMBOLS.QUARK, SYMBOLS.SWIRL, SYMBOLS.SWIRL].slice().sort().join('|');
-    if (trio === jackpot) return 4000;
-    if (sa === sb && sb === sc) return 100;
-    if (sa === sb || sa === sc || sb === sc) return 5;
-    return 0;
-  }
-
-  function matchLabel(mult) {
-    if (mult === 4000) return 'JACK';
-    if (mult === 100) return '3K';
-    if (mult === 5) return '2K';
-    return '--';
-  }
-
-  /**
-   * ============================
-   *  DOM wiring
-   * ============================
-   */
-
   const el = {
     bankrollVal: document.getElementById('bankrollVal'),
     betInput: document.getElementById('betInput'),
@@ -752,32 +543,36 @@
     slotsHint: document.getElementById('slotsHint'),
     chips: document.getElementById('chips'),
 
-    slotRuler: document.getElementById('slotRuler'),
+    statusLine: document.getElementById('statusLine'),
+    spinMeta: document.getElementById('spinMeta'),
 
-    trackA: document.getElementById('trackA'),
-    trackB: document.getElementById('trackB'),
-    trackC: document.getElementById('trackC'),
+    resultsTable: document.getElementById('resultsTable'),
+    resultsBody: document.getElementById('resultsBody'),
 
     spinBtn: document.getElementById('spinBtn'),
     clearBtn: document.getElementById('clearBtn'),
     resetBtn: document.getElementById('resetBtn'),
 
-    statusLine: document.getElementById('statusLine'),
-    spinMeta: document.getElementById('spinMeta'),
-    resultsTable: document.getElementById('resultsTable'),
-    resultsBody: document.getElementById('resultsBody'),
+    slotRing: document.getElementById('slotRing'),
+    ringA: document.getElementById('ringA'),
+    ringB: document.getElementById('ringB'),
+    ringC: document.getElementById('ringC'),
   };
 
   /**
-   * ============================
-   *  Selection state (click-only)
-   * ============================
+   * ==========================================================
+   * State
+   * ==========================================================
    */
-
   const state = {
     bankroll: 1000,
-    selected: [],   // array of 1-based slot numbers (max 3)
+    selected: [],     // 1-based slot numbers (max 3)
     spinning: false,
+
+    // Rotation state in degrees (unwrapped, can go negative large)
+    rotA: 0,
+    rotB: 0,
+    rotC: 0,
   };
 
   function setStatus(msg, kind='muted') {
@@ -797,299 +592,11 @@
     el.betInput.disabled = on;
   }
 
-  function renderChips() {
-    el.chips.innerHTML = '';
-    if (state.selected.length === 0) {
-      el.slotsHint.textContent = 'No slots selected.';
-      return;
-    }
-
-    el.slotsHint.textContent = `Selected: ${state.selected.join(', ')}`;
-
-    for (const slot of state.selected) {
-      const chip = document.createElement('div');
-      chip.className = 'chip';
-      chip.innerHTML = `SLOT ${slot} <button title="Remove slot ${slot}">×</button>`;
-      chip.querySelector('button').addEventListener('click', () => {
-        state.selected = state.selected.filter(s => s !== slot);
-        syncSelectionUI();
-      });
-      el.chips.appendChild(chip);
-    }
-  }
-
-  function syncSelectionUI() {
-    // Update ruler selected class
-    [...el.slotRuler.querySelectorAll('button')].forEach(btn => {
-      const s = Number(btn.dataset.slot);
-      btn.classList.toggle('selected', state.selected.includes(s));
-    });
-
-    // Highlight cells for selected slots (all copies)
-    const tracks = [el.trackA, el.trackB, el.trackC];
-    for (const tr of tracks) {
-      [...tr.children].forEach(cell => {
-        const s = Number(cell.dataset.slot);
-        cell.classList.toggle('selected', state.selected.includes(s));
-      });
-    }
-
-    renderChips();
-  }
-
-  function toggleSlot(slot) {
-    if (!isBettable(slot) || state.spinning) return;
-
-    if (state.selected.includes(slot)) {
-      state.selected = state.selected.filter(s => s !== slot);
-    } else {
-      if (state.selected.length >= 3) return; // enforce 1–3 slots max
-      state.selected = [...state.selected, slot].sort((a,b)=>a-b);
-    }
-    syncSelectionUI();
-  }
-
-  function clearSelection() {
-    state.selected = [];
-    syncSelectionUI();
-  }
-
   /**
-   * ============================
-   *  Wheel rendering (tracks)
-   * ============================
-   *
-   * We render each ring as repeated copies to allow long scrolling without
-   * requiring a massive DOM. We animate via transform translate3d(x,0,0).
+   * ==========================================================
+   * Betting + validation
+   * ==========================================================
    */
-
-  const REPEAT = 5; // copies of 36 slots => 180 cells
-  const CENTER_BAND_MIN = SLOTS * 1;
-  const CENTER_BAND_MAX = SLOTS * 4; // keep position inside [36, 144) for safety
-
-  function buildTrack(trackEl, ring, ringId) {
-    trackEl.innerHTML = '';
-
-    for (let rep = 0; rep < REPEAT; rep++) {
-      for (let i = 0; i < SLOTS; i++) {
-        const sym = ring[i];
-        const slot1Based = i + 1;
-
-        const d = document.createElement('div');
-        d.className = 'cell';
-        d.dataset.slot = String(slot1Based);
-        d.dataset.sym = sym;
-        d.dataset.ring = ringId;
-
-        if (UNBETTABLE.has(slot1Based)) d.classList.add('house');
-
-        const g = document.createElement('div');
-        g.className = 'g';
-        g.textContent = GLYPH[sym] ?? sym[0];
-
-        const t = document.createElement('div');
-        t.className = 't';
-        t.textContent = sym;
-
-        d.appendChild(g);
-        d.appendChild(t);
-
-        trackEl.appendChild(d);
-      }
-    }
-  }
-
-  function buildRuler() {
-    el.slotRuler.innerHTML = '';
-    for (let i = 1; i <= SLOTS; i++) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = String(i);
-      btn.dataset.slot = String(i);
-      btn.setAttribute('aria-label', `Slot ${i}`);
-
-      if (UNBETTABLE.has(i)) {
-        btn.classList.add('house');
-        btn.setAttribute('aria-disabled', 'true');
-        // leave it clickable? no. block it.
-      } else {
-        btn.addEventListener('click', () => toggleSlot(i));
-      }
-      el.slotRuler.appendChild(btn);
-    }
-  }
-
-  /**
-   * ============================
-   *  Animation math helpers
-   * ============================
-   */
-
-  function prefersReducedMotion() {
-    return globalThis.matchMedia && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  }
-
-  // Measure stride (cell width + gap) dynamically, because --cell uses clamp().
-  function measureStridePx() {
-    // Create a temp element that uses the same CSS variable
-    const tmp = document.createElement('div');
-    tmp.style.width = 'var(--cell)';
-    tmp.style.position = 'absolute';
-    tmp.style.visibility = 'hidden';
-    document.body.appendChild(tmp);
-    const w = tmp.getBoundingClientRect().width;
-    tmp.remove();
-
-    const g = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 6;
-    return w + g;
-  }
-
-  let STRIDE_PX = 40; // updated at init + resize
-  function applyShift(trackEl, posCells) {
-    trackEl.style.transform = `translate3d(${-posCells * STRIDE_PX}px,0,0)`;
-  }
-
-  // Standard ease-out for deceleration.
-  function easeOutCubic(t) {
-    return 1 - Math.pow(1 - t, 3);
-  }
-
-  /**
-   * Compute a target absolute position so that:
-   *   target % 36 == desiredOffset
-   * and target >= current + (revs * 36).
-   *
-   * We treat "position in cells" as equivalent to "offset index" for the spin.
-   */
-  function computeTargetPos(currentPos, desiredOffset) {
-    const curMod = ((currentPos % SLOTS) + SLOTS) % SLOTS;
-    const delta = (desiredOffset - curMod + SLOTS) % SLOTS;
-    const extraRevs = randInt(5, 10); // 5..9 revolutions for visible spin
-    return currentPos + extraRevs * SLOTS + delta;
-  }
-
-  /**
-   * ============================
-   *  Ring animation state machine
-   * ============================
-   *
-   * Each ring:
-   * - cruise: moves at constant velocity (cells/sec)
-   * - decel: animates to a deterministic target using easing
-   * - stopped: fixed at the final position
-   */
-  function makeRingAnim(trackEl) {
-    return {
-      trackEl,
-      phase: 'idle',        // 'idle'|'cruise'|'decel'|'stopped'
-      pos: SLOTS + randInt(0, SLOTS),  // keep inside repeat band
-      vel: 0,               // cells/sec during cruise
-      // decel params
-      decelStartPos: 0,
-      decelEndPos: 0,
-      decelStartMs: 0,
-      decelDurMs: 0,
-      finalOffset: 0,       // chosen stop offset 0..35
-    };
-  }
-
-  const ringA = makeRingAnim(el.trackA);
-  const ringB = makeRingAnim(el.trackB);
-  const ringC = makeRingAnim(el.trackC);
-
-  // Apply initial transforms
-  function applyAll() {
-    applyShift(ringA.trackEl, ringA.pos);
-    applyShift(ringB.trackEl, ringB.pos);
-    applyShift(ringC.trackEl, ringC.pos);
-  }
-
-  /**
-   * Keep positions inside the repeated band so transforms don’t drift too far.
-   * (We rendered 5 copies => safe band is roughly [36, 144).)
-   */
-  function wrapPos(r) {
-    while (r.pos >= CENTER_BAND_MAX) r.pos -= SLOTS;
-    while (r.pos < CENTER_BAND_MIN) r.pos += SLOTS;
-  }
-
-  /**
-   * Transition a ring from cruise -> decel to land on its finalOffset.
-   * Duration is derived from distance, with caps for consistency across devices.
-   */
-  function startDecel(r, nowMs) {
-    r.phase = 'decel';
-    r.decelStartPos = r.pos;
-    r.decelEndPos = computeTargetPos(r.pos, r.finalOffset);
-
-    const distance = r.decelEndPos - r.decelStartPos; // in cells
-    // Heuristic duration: faster devices will still look fine (time-based, not frame-based).
-    const base = 850;
-    const perRev = 120;
-    const revs = Math.max(0, Math.floor(distance / SLOTS) - 1);
-    r.decelDurMs = Math.min(1700, base + revs * perRev);
-
-    r.decelStartMs = nowMs;
-    r.vel = 0;
-  }
-
-  /**
-   * Main animation loop:
-   * - updates each ring depending on its phase
-   * - applies transforms
-   * - completes when all rings are stopped (then resolves via a Promise)
-   */
-  let rafId = 0;
-
-  function tick(nowMs) {
-    const dt = (nowMs - tick._lastMs) / 1000;
-    tick._lastMs = nowMs;
-
-    const rings = [ringA, ringB, ringC];
-
-    for (const r of rings) {
-      if (r.phase === 'cruise') {
-        r.pos += r.vel * dt;
-        wrapPos(r);
-      } else if (r.phase === 'decel') {
-        const t = Math.min(1, (nowMs - r.decelStartMs) / r.decelDurMs);
-        const e = easeOutCubic(t);
-        r.pos = r.decelStartPos + (r.decelEndPos - r.decelStartPos) * e;
-
-        if (t >= 1) {
-          r.pos = r.decelEndPos;
-          r.phase = 'stopped';
-          wrapPos(r);
-        }
-      }
-    }
-
-    applyAll();
-
-    // Continue while any ring is moving.
-    const anyMoving = rings.some(r => r.phase === 'cruise' || r.phase === 'decel');
-    if (anyMoving) {
-      rafId = requestAnimationFrame(tick);
-    } else {
-      tick._resolve?.();
-    }
-  }
-  tick._lastMs = performance.now();
-
-  function runAnimationUntilStop() {
-    return new Promise(resolve => {
-      tick._resolve = resolve;
-      tick._lastMs = performance.now();
-      rafId = requestAnimationFrame(tick);
-    });
-  }
-
-  /**
-   * ============================
-   *  Input validation (bet only)
-   * ============================
-   */
-
   function validateBet(slotsCount) {
     const betRaw = el.betInput.value.trim();
     const bet = betRaw === '' ? MIN_BET : Number(betRaw);
@@ -1112,23 +619,373 @@
   }
 
   /**
-   * ============================
-   *  Results rendering
-   * ============================
+   * ==========================================================
+   * Payout rules
+   * ==========================================================
+   */
+  function payoutMultiplier([sa, sb, sc]) {
+    const trio = [sa, sb, sc].slice().sort().join('|');
+    const jackpot = [SYMBOLS.QUARK, SYMBOLS.SWIRL, SYMBOLS.SWIRL].slice().sort().join('|');
+    if (trio === jackpot) return 4000;
+    if (sa === sb && sb === sc) return 100;
+    if (sa === sb || sa === sc || sb === sc) return 5;
+    return 0;
+  }
+
+  function matchLabel(mult) {
+    if (mult === 4000) return 'JACK';
+    if (mult === 100) return '3K';
+    if (mult === 5) return '2K';
+    return '--';
+  }
+
+  /**
+   * For a slot N (1-based), apply offset mapping:
+   * symbol = ring[(N - 1 + offset) % 36]
+   */
+  function symbolsAtSlot(slot1Based, offsets) {
+    const i = (slot1Based - 1) % SLOTS;
+    const sa = RING_A[(i + offsets.a) % SLOTS];
+    const sb = RING_B[(i + offsets.b) % SLOTS];
+    const sc = RING_C[(i + offsets.c) % SLOTS];
+    return [sa, sb, sc];
+  }
+
+  /**
+   * ==========================================================
+   * SVG geometry helpers
+   * ==========================================================
+   *
+   * We generate wedge paths for each of 36 sectors.
+   * Angles:
+   *   - slot 1 is centered at the top (12 o'clock).
+   *   - we use SVG polar coordinates where 0° is at the top by offsetting -90°.
+   */
+  const CX = 300, CY = 300;
+
+  function degToRad(d) { return (d * Math.PI) / 180; }
+
+  // Convert polar angle (degrees) + radius to x,y. Angle 0° at top.
+  function polar(cx, cy, r, angleDeg) {
+    const a = degToRad(angleDeg - 90);
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+  }
+
+  // Create a donut-sector wedge path from startAngle to endAngle.
+  function wedgePath(rInner, rOuter, startDeg, endDeg) {
+    const p1 = polar(CX, CY, rOuter, startDeg);
+    const p2 = polar(CX, CY, rOuter, endDeg);
+    const p3 = polar(CX, CY, rInner, endDeg);
+    const p4 = polar(CX, CY, rInner, startDeg);
+
+    const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
+
+    return [
+      `M ${p1.x} ${p1.y}`,
+      `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p2.x} ${p2.y}`,
+      `L ${p3.x} ${p3.y}`,
+      `A ${rInner} ${rInner} 0 ${largeArc} 0 ${p4.x} ${p4.y}`,
+      'Z'
+    ].join(' ');
+  }
+
+  // Keep text upright-ish: if angle is on the bottom half, rotate 180°.
+  function uprightTextRotation(angleDeg) {
+    const a = ((angleDeg % 360) + 360) % 360;
+    return (a > 90 && a < 270) ? 180 : 0;
+  }
+
+  /**
+   * ==========================================================
+   * Wheel building
+   * ==========================================================
+   *
+   * Radii (outer -> inner):
+   *   Slot ring: 240..280
+   *   Ring A:    195..235
+   *   Ring B:    150..190
+   *   Ring C:    105..145
+   */
+  const RAD = {
+    slotIn: 240, slotOut: 280,
+    aIn: 195, aOut: 235,
+    bIn: 150, bOut: 190,
+    cIn: 105, cOut: 145,
+  };
+
+  function clearGroup(g) { while (g.firstChild) g.removeChild(g.firstChild); }
+
+  /**
+   * Build outer slot ring: fixed wedges with slot numbers, clickable.
+   */
+  function buildSlotRing() {
+    clearGroup(el.slotRing);
+
+    for (let slot = 1; slot <= SLOTS; slot++) {
+      const start = (slot - 1) * STEP_DEG;
+      const end = slot * STEP_DEG;
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.classList.add('slotWedge');
+      g.dataset.slot = String(slot);
+
+      const isHouse = UNBETTABLE.has(slot);
+      if (isHouse) g.classList.add('house');
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', wedgePath(RAD.slotIn, RAD.slotOut, start, end));
+
+      // Bettable vs house styling
+      if (isHouse) {
+        path.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--houseFill') || 'rgba(255,208,122,0.22)');
+        path.setAttribute('stroke', getComputedStyle(document.documentElement).getPropertyValue('--houseStroke') || 'rgba(255,208,122,0.55)');
+      } else {
+        path.setAttribute('fill', 'rgba(0,0,0,0.16)');
+        path.setAttribute('stroke', 'rgba(120,255,160,0.16)');
+      }
+      path.setAttribute('stroke-width', '1.2');
+
+      // Slot number text at mid-angle
+      const mid = start + STEP_DEG / 2;
+      const pos = polar(CX, CY, (RAD.slotIn + RAD.slotOut) / 2, mid);
+
+      const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.classList.add('slotText');
+      if (isHouse) txt.classList.add('house');
+      txt.setAttribute('x', pos.x);
+      txt.setAttribute('y', pos.y);
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('dominant-baseline', 'middle');
+      txt.textContent = String(slot);
+
+      // rotate text slightly to follow ring; flip on bottom half
+      const flip = uprightTextRotation(mid);
+      txt.setAttribute('transform', `rotate(${mid + flip} ${pos.x} ${pos.y})`);
+
+      if (!isHouse) {
+        g.addEventListener('click', () => toggleSlot(slot));
+      }
+
+      g.appendChild(path);
+      g.appendChild(txt);
+      el.slotRing.appendChild(g);
+    }
+  }
+
+  /**
+   * Build a symbol ring inside the wheel.
+   * - The ring itself is a rotating <g>.
+   * - Each sector is a wedge with a glyph text placed at its center.
+   */
+  function buildSymbolRing(groupEl, ringSymbols, rInner, rOuter) {
+    clearGroup(groupEl);
+
+    for (let i = 0; i < SLOTS; i++) {
+      const slot = i + 1;
+      const start = i * STEP_DEG;
+      const end = (i + 1) * STEP_DEG;
+      const mid = start + STEP_DEG / 2;
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.dataset.slot = String(slot);
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', wedgePath(rInner, rOuter, start, end));
+      path.setAttribute('fill', 'rgba(0,0,0,0.18)');
+      path.setAttribute('stroke', 'rgba(120,255,160,0.12)');
+      path.setAttribute('stroke-width', '1.0');
+
+      const sym = ringSymbols[i];
+      const glyph = GLYPH[sym] ?? sym[0];
+
+      const pos = polar(CX, CY, (rInner + rOuter) / 2, mid);
+      const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.classList.add('symbolGlyph');
+      txt.setAttribute('x', pos.x);
+      txt.setAttribute('y', pos.y);
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('dominant-baseline', 'middle');
+      txt.textContent = glyph;
+
+      // Keep glyph roughly upright
+      const flip = uprightTextRotation(mid);
+      txt.setAttribute('transform', `rotate(${mid + flip} ${pos.x} ${pos.y})`);
+
+      g.appendChild(path);
+      g.appendChild(txt);
+      groupEl.appendChild(g);
+    }
+  }
+
+  /**
+   * Update selection highlight on the outer slot ring.
+   */
+  function syncSelectionUI() {
+    // Slot wedge selected styling
+    const wedges = el.slotRing.querySelectorAll('g.slotWedge');
+    wedges.forEach(w => {
+      const slot = Number(w.dataset.slot);
+      w.classList.toggle('selected', state.selected.includes(slot));
+    });
+
+    // Chips list
+    renderChips();
+  }
+
+  function renderChips() {
+    el.chips.innerHTML = '';
+    if (state.selected.length === 0) {
+      el.slotsHint.textContent = 'No slots selected.';
+      return;
+    }
+    el.slotsHint.textContent = `Selected: ${state.selected.join(', ')}`;
+
+    for (const slot of state.selected) {
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.innerHTML = `SLOT ${slot} <button title="Remove slot ${slot}">×</button>`;
+      chip.querySelector('button').addEventListener('click', () => {
+        state.selected = state.selected.filter(s => s !== slot);
+        syncSelectionUI();
+      });
+      el.chips.appendChild(chip);
+    }
+  }
+
+  function toggleSlot(slot) {
+    if (state.spinning) return;
+    if (UNBETTABLE.has(slot)) return;
+
+    if (state.selected.includes(slot)) {
+      state.selected = state.selected.filter(s => s !== slot);
+    } else {
+      if (state.selected.length >= 3) return;
+      state.selected = [...state.selected, slot].sort((a,b)=>a-b);
+    }
+    syncSelectionUI();
+  }
+
+  function clearSelection() {
+    state.selected = [];
+    syncSelectionUI();
+  }
+
+  /**
+   * ==========================================================
+   * Rotation + animation
+   * ==========================================================
+   *
+   * We rotate SVG groups with transform="rotate(angle cx cy)".
+   * Positive angle rotates clockwise in SVG; we spin CCW by decreasing degrees.
    */
 
+  function setGroupRotation(groupEl, deg) {
+    groupEl.setAttribute('transform', `rotate(${deg} ${CX} ${CY})`);
+  }
+
+  function mod(n, m) { return ((n % m) + m) % m; }
+
+  // Ease-out curve for deceleration.
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  /**
+   * Compute a target degree that:
+   *  - ends at targetPhaseDeg modulo 360
+   *  - moves in the negative direction (CCW spin)
+   *  - includes several extra revolutions (for drama)
+   */
+  function computeTargetDeg(currentDeg, targetPhaseDeg, extraRevs) {
+    const curPhase = mod(currentDeg, 360);
+    const tgtPhase = mod(targetPhaseDeg, 360);
+
+    // phaseDelta in (-360, 0] for CCW-only travel
+    let phaseDelta = tgtPhase - curPhase;
+    phaseDelta = mod(phaseDelta, 360);
+    if (phaseDelta > 0) phaseDelta -= 360;
+
+    // additional full spins (negative)
+    return currentDeg + phaseDelta - (extraRevs * 360);
+  }
+
+  /**
+   * Ring animation object: cruise then decel.
+   */
+  function makeAnim(getDeg, setDeg) {
+    return {
+      phase: 'idle',
+      getDeg, setDeg,
+      vel: 0, // deg/sec (negative for CCW)
+      decelStartDeg: 0,
+      decelEndDeg: 0,
+      decelStartMs: 0,
+      decelDurMs: 0,
+    };
+  }
+
+  const animA = makeAnim(() => state.rotA, (d) => { state.rotA = d; setGroupRotation(el.ringA, d); });
+  const animB = makeAnim(() => state.rotB, (d) => { state.rotB = d; setGroupRotation(el.ringB, d); });
+  const animC = makeAnim(() => state.rotC, (d) => { state.rotC = d; setGroupRotation(el.ringC, d); });
+
+  function startDecel(anim, nowMs, endDeg, durMs) {
+    anim.phase = 'decel';
+    anim.decelStartDeg = anim.getDeg();
+    anim.decelEndDeg = endDeg;
+    anim.decelStartMs = nowMs;
+    anim.decelDurMs = durMs;
+    anim.vel = 0;
+  }
+
+  let rafId = 0;
+
+  function runUntilStop() {
+    return new Promise(resolve => {
+      const last = { t: performance.now() };
+
+      function tick(now) {
+        const dt = (now - last.t) / 1000;
+        last.t = now;
+
+        const rings = [animA, animB, animC];
+
+        for (const a of rings) {
+          if (a.phase === 'cruise') {
+            a.setDeg(a.getDeg() + a.vel * dt);
+          } else if (a.phase === 'decel') {
+            const t = Math.min(1, (now - a.decelStartMs) / a.decelDurMs);
+            const e = easeOutCubic(t);
+            a.setDeg(a.decelStartDeg + (a.decelEndDeg - a.decelStartDeg) * e);
+            if (t >= 1) a.phase = 'stopped';
+          }
+        }
+
+        const anyMoving = rings.some(a => a.phase === 'cruise' || a.phase === 'decel');
+        if (anyMoving) rafId = requestAnimationFrame(tick);
+        else resolve();
+      }
+
+      rafId = requestAnimationFrame(tick);
+    });
+  }
+
+  /**
+   * ==========================================================
+   * Results rendering
+   * ==========================================================
+   */
   function renderResults(rows) {
     el.resultsBody.innerHTML = '';
     for (const r of rows) {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${r.slot}</td>
-        <td>${GLYPH[r.sa] ?? r.sa}</td>
-        <td>${GLYPH[r.sb] ?? r.sb}</td>
-        <td>${GLYPH[r.sc] ?? r.sc}</td>
-        <td>${r.match}</td>
-        <td>${r.mult}</td>
-        <td>${r.win}</td>
+        <td style="padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">${r.slot}</td>
+        <td style="padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">${GLYPH[r.sa] ?? r.sa}</td>
+        <td style="padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">${GLYPH[r.sb] ?? r.sb}</td>
+        <td style="padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">${GLYPH[r.sc] ?? r.sc}</td>
+        <td style="padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">${r.match}</td>
+        <td style="padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">${r.mult}</td>
+        <td style="padding:10px 8px; border-bottom:1px solid rgba(120,255,160,0.10);">${r.win}</td>
       `;
       el.resultsBody.appendChild(tr);
     }
@@ -1136,11 +993,10 @@
   }
 
   /**
-   * ============================
-   *  Spin orchestration
-   * ============================
+   * ==========================================================
+   * Spin orchestration
+   * ==========================================================
    */
-
   async function spin() {
     if (state.spinning) return;
 
@@ -1156,7 +1012,7 @@
     }
     const bet = vb.bet;
 
-    // Stake immediately (casino style).
+    // Stake immediately.
     const stake = bet * state.selected.length;
     state.bankroll -= stake;
     updateBankroll();
@@ -1164,51 +1020,59 @@
     setSpinning(true);
     setStatus('SPINNING // WATCH THE WHEEL', 'warn');
     el.spinMeta.textContent = '';
+    el.resultsTable.style.display = 'none';
 
-    // Choose deterministic final offsets for each ring.
+    // Choose final offsets per ring (0..35).
     const final = {
       a: randInt(0, SLOTS),
       b: randInt(0, SLOTS),
       c: randInt(0, SLOTS),
     };
 
-    // Configure rings for cruise.
-    // We use slightly different velocities so the rings feel independent.
-    ringA.phase = 'cruise'; ringA.vel = randInt(22, 30);
-    ringB.phase = 'cruise'; ringB.vel = randInt(26, 35);
-    ringC.phase = 'cruise'; ringC.vel = randInt(30, 40);
+    // Desired final phase degrees for each ring:
+    // angle = -offset * 10° (CCW) to match symbolAtSlot mapping.
+    const targetPhaseA = -final.a * STEP_DEG;
+    const targetPhaseB = -final.b * STEP_DEG;
+    const targetPhaseC = -final.c * STEP_DEG;
 
-    ringA.finalOffset = final.a;
-    ringB.finalOffset = final.b;
-    ringC.finalOffset = final.c;
-
-    // Reduced motion: snap directly to final state (no animation).
     if (prefersReducedMotion()) {
-      ringA.pos = computeTargetPos(ringA.pos, ringA.finalOffset);
-      ringB.pos = computeTargetPos(ringB.pos, ringB.finalOffset);
-      ringC.pos = computeTargetPos(ringC.pos, ringC.finalOffset);
-      ringA.phase = ringB.phase = ringC.phase = 'stopped';
-      wrapPos(ringA); wrapPos(ringB); wrapPos(ringC);
-      applyAll();
+      // Snap directly to phases.
+      state.rotA = targetPhaseA; state.rotB = targetPhaseB; state.rotC = targetPhaseC;
+      setGroupRotation(el.ringA, state.rotA);
+      setGroupRotation(el.ringB, state.rotB);
+      setGroupRotation(el.ringC, state.rotC);
+      animA.phase = animB.phase = animC.phase = 'stopped';
     } else {
-      // Schedule sequential decel starts: A then B then C
-      const startMs = performance.now();
-      const stopA = randInt(900, 1150);
-      const stopB = randInt(1200, 1500);
-      const stopC = randInt(1500, 1850);
+      // Cruise speeds (deg/sec), negative for CCW.
+      animA.phase = 'cruise'; animA.vel = -randInt(220, 300);
+      animB.phase = 'cruise'; animB.vel = -randInt(260, 340);
+      animC.phase = 'cruise'; animC.vel = -randInt(300, 420);
 
-      // Kick off the loop (it will run until all rings stop)
-      const animPromise = runAnimationUntilStop();
+      // Compute deterministic end degrees with extra revolutions.
+      const endA = computeTargetDeg(state.rotA, targetPhaseA, randInt(5, 9));
+      const endB = computeTargetDeg(state.rotB, targetPhaseB, randInt(6, 10));
+      const endC = computeTargetDeg(state.rotC, targetPhaseC, randInt(7, 11));
 
-      // Timers move rings into decel; ring continues ticking via rAF.
-      setTimeout(() => startDecel(ringA, performance.now()), stopA);
-      setTimeout(() => startDecel(ringB, performance.now()), stopB);
-      setTimeout(() => startDecel(ringC, performance.now()), stopC);
+      // Start the animation loop.
+      const loop = runUntilStop();
 
-      await animPromise;
+      // Sequential stop timings: A then B then C (like a physical wheel settling).
+      setTimeout(() => startDecel(animA, performance.now(), endA, randInt(900, 1400)), randInt(700, 1000));
+      setTimeout(() => startDecel(animB, performance.now(), endB, randInt(950, 1500)), randInt(950, 1250));
+      setTimeout(() => startDecel(animC, performance.now(), endC, randInt(1000, 1600)), randInt(1200, 1500));
+
+      await loop;
+
+      // Snap exactly to final phases after stop (guards against float drift).
+      state.rotA = targetPhaseA;
+      state.rotB = targetPhaseB;
+      state.rotC = targetPhaseC;
+      setGroupRotation(el.ringA, state.rotA);
+      setGroupRotation(el.ringB, state.rotB);
+      setGroupRotation(el.ringC, state.rotC);
     }
 
-    // Evaluate outcome using final offsets (not derived from pos rounding).
+    // Evaluate results from final offsets (not from degrees).
     const rows = [];
     let totalWin = 0;
 
@@ -1223,7 +1087,8 @@
     state.bankroll += totalWin;
     updateBankroll();
 
-    el.spinMeta.textContent = `Offsets: A=${final.a}, B=${final.b}, C=${final.c} — Staked ${stake}, Won ${totalWin}, Net ${totalWin - stake}`;
+    el.spinMeta.textContent =
+      `Offsets: A=${final.a}, B=${final.b}, C=${final.c} — Staked ${stake}, Won ${totalWin}, Net ${totalWin - stake}`;
     renderResults(rows);
 
     if (totalWin > 0) setStatus('DABO! // PROFIT ACHIEVED', 'ok');
@@ -1238,61 +1103,45 @@
   }
 
   function resetAll() {
-    // Stop any running animation safely
     cancelAnimationFrame(rafId);
-    tick._resolve = null;
 
     state.bankroll = 1000;
     updateBankroll();
 
-    // Reset ring positions and states
-    ringA.phase = ringB.phase = ringC.phase = 'idle';
-    ringA.pos = SLOTS + randInt(0, SLOTS);
-    ringB.pos = SLOTS + randInt(0, SLOTS);
-    ringC.pos = SLOTS + randInt(0, SLOTS);
-    applyAll();
+    // Reset rotations to 0.
+    state.rotA = 0; state.rotB = 0; state.rotC = 0;
+    setGroupRotation(el.ringA, 0);
+    setGroupRotation(el.ringB, 0);
+    setGroupRotation(el.ringC, 0);
+
+    animA.phase = animB.phase = animC.phase = 'idle';
 
     clearSelection();
 
     el.betInput.value = '';
     el.betHint.textContent = '';
-    el.resultsTable.style.display = 'none';
     el.spinMeta.textContent = '';
+    el.resultsTable.style.display = 'none';
 
     el.spinBtn.disabled = false;
     setStatus('SELECT SLOTS, ENTER BET, THEN SPIN.', 'muted');
   }
 
   /**
-   * ============================
-   *  Init
-   * ============================
+   * ==========================================================
+   * Init
+   * ==========================================================
    */
-
-  function initLayoutObservers() {
-    // Recompute stride on resize/zoom/font changes.
-    const recalc = () => {
-      STRIDE_PX = measureStridePx();
-      applyAll();
-    };
-    recalc();
-
-    // ResizeObserver is widely supported; fall back to window resize if missing.
-    if (globalThis.ResizeObserver) {
-      const ro = new ResizeObserver(() => recalc());
-      ro.observe(document.documentElement);
-    } else {
-      window.addEventListener('resize', recalc, { passive: true });
-    }
-  }
-
   function init() {
-    buildRuler();
-    buildTrack(el.trackA, RING_A, 'A');
-    buildTrack(el.trackB, RING_B, 'B');
-    buildTrack(el.trackC, RING_C, 'C');
+    buildSlotRing();
+    buildSymbolRing(el.ringA, RING_A, RAD.aIn, RAD.aOut);
+    buildSymbolRing(el.ringB, RING_B, RAD.bIn, RAD.bOut);
+    buildSymbolRing(el.ringC, RING_C, RAD.cIn, RAD.cOut);
 
-    initLayoutObservers();
+    // Initial rotations
+    setGroupRotation(el.ringA, state.rotA);
+    setGroupRotation(el.ringB, state.rotB);
+    setGroupRotation(el.ringC, state.rotC);
 
     updateBankroll();
     clearSelection();
@@ -1302,15 +1151,16 @@
     el.clearBtn.addEventListener('click', () => { clearSelection(); setStatus('SELECTION CLEARED.', 'muted'); });
     el.resetBtn.addEventListener('click', resetAll);
 
-    // Press Enter in bet field to spin
     el.betInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') spin();
     });
-
-    // Keep bet hint up to date
     el.betInput.addEventListener('input', () => {
       if (state.selected.length > 0) validateBet(state.selected.length);
     });
+
+    // If the user zooms/resizes, SVG scales automatically.
+    // We only need to re-sync selection UI (safe and cheap).
+    window.addEventListener('resize', () => syncSelectionUI(), { passive: true });
   }
 
   init();
