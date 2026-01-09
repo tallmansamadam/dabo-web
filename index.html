@@ -3,38 +3,33 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Dabo // Ferengi Wheel</title>
+  <title>DABO // Ferengi Wheel</title>
 
   <!--
     ==========================================================
-    DABO — FERENGI WHEEL UI (Single-file static web app)
+    DABO — Ferengi Wheel (Single-file static app)
     ==========================================================
-    Goals solved in this revision:
-      1) Wheel is a real top-down view: 3 concentric rings + outer slot ring.
-      2) No "Ring A/B/C" labels: the wheel speaks for itself visually.
-      3) No redundant slot input: slot selection is click/tap on wheel only.
-      4) Responsiveness/wrapping: layout uses min-width:0, clamp(), and safe wrapping.
-      5) House-only slots: distinct background and high-contrast numbers for readability.
+    This file intentionally contains *everything*: CSS + SVG + JS.
 
-    How the wheel works:
-      - There are 36 slots. Each ring is a 36-element symbol array.
-      - A "spin" selects offsets (0..35) for each ring.
-      - For slot N (1-based), symbol = ring[(N - 1 + offset) % 36].
-      - Visually, each ring rotates COUNTERCLOCKWISE by offset*(360/36)=offset*10 degrees,
-        so the mapping matches the formula above.
+    Key features:
+      - Top-down SVG wheel: outer slot ring (clickable), 3 rotating symbol rings, fixed pointer.
+      - Reserved/house-only slots: RED shaded + high-contrast numbers, disabled from selection.
+      - Result modal dialog after each spin: summary + Quark jape + big ASCII Quark + OK.
+      - Responsive hardening (portrait/mobile): avoids letter-by-letter wrapping, uses clamp + breakpoints.
+      - Reduced motion: snaps results if prefers-reduced-motion is set.
 
-    Accessibility:
-      - If prefers-reduced-motion is enabled, animation snaps directly to result.
-
-    Deployment:
-      - Static host (Netlify): no build command, publish root.
+    Math/logic mapping:
+      - 36 slots => 10° per slot
+      - Each ring has an integer offset in [0..35]
+      - For slot N (1-based): symbol = ring[(N-1 + offset) % 36]
+      - To match visually, ring group rotates CCW by offset*10° => angle = -offset*10°
   -->
 
   <style>
     :root{
       --bg0:#060707;
       --bg1:#0a0c0b;
-      --panel:#0b120f;
+
       --ink:#b7ffbf;
       --ink2:#7bff8f;
       --warn:#ffd07a;
@@ -43,23 +38,20 @@
       --brass2:#d2a84b;
       --brass3:#f7d57e;
 
-      /* House-only (unbettable) contrast */
-      --houseFill: rgba(255, 208, 122, 0.22);
-      --houseStroke: rgba(255, 208, 122, 0.55);
-      --houseText: rgba(255, 245, 220, 0.98);
+      /* Reserved / house-only slots (RED shading) */
+      --reservedFill: rgba(255, 80, 80, 0.24);
+      --reservedStroke: rgba(255, 90, 90, 0.70);
+      --reservedText: rgba(255, 245, 245, 0.98);
 
-      /* Responsive typography and spacing */
+      /* Layout */
       --radius: 16px;
       --gap: clamp(10px, 2.2vw, 16px);
-
-      /* Wheel size behavior:
-         - wheel container uses aspect-ratio:1 so it stays a circle.
-         - svg scales automatically with width. */
       --wheelMax: 680px;
     }
 
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
+
     body{
       margin:0;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -71,9 +63,9 @@
       overflow-x:hidden;
     }
 
-    /* Global wrapping safety: prevents long strings from overflow */
-    .wrap, .panel, .muted, .monoSmall, .pill { overflow-wrap:anywhere; min-width:0; }
-
+    /* IMPORTANT:
+       - We avoid overflow-wrap:anywhere globally because it can cause letter-by-letter breaks on narrow screens.
+       - Instead we apply safe wrapping to only the elements that need it, and use break-word (not anywhere). */
     .wrap{ max-width: 1120px; margin: 22px auto; padding: 0 16px 40px; }
 
     .frame{
@@ -137,11 +129,15 @@
       font-weight: 900;
       letter-spacing: 0.10em;
       font-size: clamp(18px, 2.1vw, 24px);
+      white-space: nowrap;
     }
     .subtitle{
       font-size: 12px;
       letter-spacing: 0.09em;
       color: rgba(183,255,191,0.75);
+      max-width: 100%;
+      word-break: normal;
+      overflow-wrap: break-word;
     }
 
     .statusrow{
@@ -164,7 +160,15 @@
       font-size: 12px;
       letter-spacing: 0.06em;
       user-select:none;
+
+      /* Desktop flow stays clean */
+      white-space: nowrap;
+
+      /* Avoid mid-letter breaks */
+      word-break: normal;
+      overflow-wrap: normal;
       min-width: 0;
+      max-width: 100%;
     }
     .pillBrass{
       background: linear-gradient(180deg, rgba(210,168,75,0.22), rgba(210,168,75,0.08));
@@ -200,13 +204,31 @@
       color: rgba(183,255,191,0.82);
     }
 
-    .muted{ color: rgba(183,255,191,0.68); font-size: 12px; line-height: 1.4; }
-    .monoSmall{ font-size: 11px; letter-spacing:0.10em; color: rgba(183,255,191,0.82); }
+    .muted{
+      color: rgba(183,255,191,0.68);
+      font-size: 12px;
+      line-height: 1.4;
+      word-break: normal;
+      overflow-wrap: break-word;
+    }
+    .monoSmall{
+      font-size: 11px;
+      letter-spacing:0.10em;
+      color: rgba(183,255,191,0.82);
+      word-break: normal;
+      overflow-wrap: break-word;
+    }
     .warn{ color: var(--warn); }
     .bad{ color: var(--bad); }
     .ok{ color: var(--ink2); }
 
-    label{ display:block; margin: 10px 0 6px; font-size: 12px; letter-spacing:0.08em; color: rgba(183,255,191,0.85); }
+    label{
+      display:block;
+      margin: 10px 0 6px;
+      font-size: 12px;
+      letter-spacing:0.08em;
+      color: rgba(183,255,191,0.85);
+    }
     input, button{
       font: inherit;
       padding: 10px 12px;
@@ -217,6 +239,7 @@
       outline:none;
       box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
       min-width: 0;
+      max-width: 100%;
     }
     input::placeholder{ color: rgba(183,255,191,0.35); }
     button{
@@ -241,6 +264,7 @@
       gap: 8px;
       margin-top: 8px;
       min-height: 28px;
+      min-width: 0;
     }
     .chip{
       display:inline-flex;
@@ -254,6 +278,8 @@
       font-size: 11px;
       letter-spacing:0.08em;
       user-select:none;
+      max-width: 100%;
+      overflow-wrap: break-word;
     }
     .chip button{
       all: unset;
@@ -272,16 +298,19 @@
       place-items:center;
       width: 100%;
       max-width: var(--wheelMax);
-      margin: 0 auto;
+      margin: 10px auto 0;
       aspect-ratio: 1;
+      min-width: 0;
     }
     svg#wheelSvg{
       width: 100%;
       height: 100%;
       display:block;
+      touch-action: manipulation;
+      user-select:none;
     }
 
-    /* SVG styling (strokes and text) */
+    /* SVG styling */
     .slotWedge{ cursor:pointer; }
     .slotWedge.house{ cursor:not-allowed; }
 
@@ -295,7 +324,7 @@
       user-select:none;
     }
     .slotText.house{
-      fill: var(--houseText);
+      fill: var(--reservedText);
       stroke: rgba(0,0,0,0.65);
     }
 
@@ -315,9 +344,137 @@
       user-select:none;
     }
 
-    /* Reduced motion */
+    /* ===========================
+       Modal dialog (Quark jape)
+       =========================== */
+    .modal.hidden{ display:none; }
+    .modal{
+      position:fixed;
+      inset:0;
+      z-index:9999;
+      display:grid;
+      place-items:center;
+      padding: clamp(10px, 3vw, 20px);
+    }
+    .modalBackdrop{
+      position:absolute;
+      inset:0;
+      background: rgba(0,0,0,0.70);
+      backdrop-filter: blur(2px);
+    }
+    .modalPanel{
+      position:relative;
+      width:min(980px, 100%);
+      max-height:min(86vh, 820px);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(10,24,18,0.96), rgba(6,12,9,0.96));
+      box-shadow:
+        0 18px 70px rgba(0,0,0,0.7),
+        inset 0 0 0 1px rgba(247,213,126,0.24),
+        inset 0 0 40px rgba(0,0,0,0.55);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-width:0;
+    }
+    .modalHeader{
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid rgba(120,255,160,0.12);
+      display:flex;
+      flex-direction:column;
+      gap: 6px;
+    }
+    .modalTitle{
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      font-size: clamp(14px, 2.1vw, 18px);
+      color: rgba(247,213,126,0.96);
+    }
+    .modalSub{
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      color: rgba(183,255,191,0.74);
+      overflow-wrap: break-word;
+    }
+
+    .modalBody{
+      padding: 14px;
+      display:grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 12px;
+      min-width:0;
+      overflow:auto;
+    }
+    .ascii{
+      margin:0;
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(0,0,0,0.30);
+      border: 1px solid rgba(210,168,75,0.22);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
+      color: rgba(247,213,126,0.95);
+
+      /* Big and readable; clamps down for tiny screens */
+      font-size: clamp(10px, 1.7vw, 14px);
+      line-height: 1.05;
+
+      /* Keep ASCII intact; allow scrolling rather than mangling */
+      white-space: pre;
+      overflow: auto;
+      max-width: 100%;
+    }
+    .modalCopy{
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+    }
+    .modalSummary{
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(120,255,160,0.06);
+      border: 1px solid rgba(120,255,160,0.14);
+      overflow-wrap: break-word;
+    }
+    .modalRemark{
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(210,168,75,0.10);
+      border: 1px solid rgba(210,168,75,0.22);
+      color: rgba(247,213,126,0.95);
+      overflow-wrap: break-word;
+    }
+    .modalFooter{
+      padding: 12px 14px 14px;
+      border-top: 1px solid rgba(120,255,160,0.12);
+      display:flex;
+      justify-content:flex-end;
+      gap: 10px;
+    }
+    .modalOk{ }
+
+    /* Portrait/mobile breakpoints: fix wrapping WITHOUT hurting desktop */
+    @media (max-width: 520px){
+      .statusrow{ justify-content:flex-start; }
+      .pill{
+        white-space: normal;           /* allow wrap on small screens */
+        letter-spacing: 0.05em;
+      }
+      .title{ gap: 6px; }
+      .title h1{ letter-spacing: 0.08em; }
+      .subtitle{ letter-spacing: 0.05em; }
+      .modalBody{ grid-template-columns: 1fr; }
+      .ascii{ font-size: clamp(10px, 3.2vw, 13px); }
+    }
+
+    /* Short-height devices (landscape phones) */
+    @media (max-height: 560px){
+      .modalPanel{ max-height: 92vh; }
+      .modalBody{ padding: 10px; }
+    }
+
     @media (prefers-reduced-motion: reduce){
-      *{ scroll-behavior: auto !important; }
+      .modalBackdrop{ backdrop-filter: none; }
     }
   </style>
 </head>
@@ -343,18 +500,11 @@
             <h2>Wheel</h2>
 
             <div class="muted" id="hintLine">
-              Tap/click slot numbers to select (1–3). House-only slots are shaded and disabled.
+              Tap/click slot numbers to select (1–3). Reserved slots are shaded red and disabled.
             </div>
 
             <div class="wheelShell" aria-label="Dabo wheel">
-              <!--
-                SVG wheel:
-                  - Outer ring = slot numbers (fixed, clickable)
-                  - 3 inner rings = symbols, each rotates independently
-                  - Pointer at top indicates the "read" position
-              -->
               <svg id="wheelSvg" viewBox="0 0 600 600" role="img" aria-label="Dabo wheel">
-                <!-- Background glow -->
                 <defs>
                   <radialGradient id="wheelGlow" cx="50%" cy="45%" r="60%">
                     <stop offset="0%" stop-color="rgba(120,255,160,0.08)"/>
@@ -366,19 +516,19 @@
                 <!-- Outer rim -->
                 <circle cx="300" cy="300" r="285" fill="rgba(0,0,0,0.18)" stroke="rgba(247,213,126,0.22)" stroke-width="3"></circle>
 
-                <!-- Slot ring (clickable) gets generated into this group -->
+                <!-- Slot ring (fixed, clickable) -->
                 <g id="slotRing"></g>
 
-                <!-- Symbol rings (generated wedges + glyph text) -->
+                <!-- Rotating symbol rings -->
                 <g id="ringA"></g>
                 <g id="ringB"></g>
                 <g id="ringC"></g>
 
-                <!-- Center hub -->
+                <!-- Hub -->
                 <circle cx="300" cy="300" r="70" fill="rgba(0,0,0,0.35)" stroke="rgba(120,255,160,0.14)" stroke-width="2"></circle>
                 <text x="300" y="305" text-anchor="middle" class="symbolGlyph" style="font-size:20px; letter-spacing:0.18em;">DABO</text>
 
-                <!-- Pointer (top) -->
+                <!-- Pointer at top -->
                 <polygon points="300,18 290,38 310,38" fill="rgba(247,213,126,0.85)" stroke="rgba(0,0,0,0.6)" stroke-width="2"></polygon>
               </svg>
             </div>
@@ -422,11 +572,32 @@
             </div>
 
             <div class="muted" style="margin-top: 14px;">
-              Reduce Motion enabled? The wheel will snap to results automatically.
+              Reduce Motion enabled? The wheel snaps to results.
             </div>
           </div>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- Result modal (Quark terminal dialog) -->
+  <div id="resultModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modalBackdrop" data-close="1"></div>
+    <div class="modalPanel" tabindex="-1">
+      <div class="modalHeader">
+        <div id="modalTitle" class="modalTitle">RESULT</div>
+        <div id="modalSub" class="modalSub">Quark’s assessment pending…</div>
+      </div>
+      <div class="modalBody">
+        <pre id="quarkAscii" class="ascii" aria-label="ASCII art of Quark"></pre>
+        <div class="modalCopy">
+          <div id="modalSummary" class="modalSummary"></div>
+          <div id="modalRemark" class="modalRemark"></div>
+        </div>
+      </div>
+      <div class="modalFooter">
+        <button id="modalOk" class="modalOk">OK</button>
       </div>
     </div>
   </div>
@@ -445,8 +616,8 @@
   const MIN_BET = 10;
   const MAX_BET = 100;
 
-  // House-only slots are unbettable; they get special styling.
-  const UNBETTABLE = new Set([5,6,7,17,18,19,29,30,31]);
+  // Reserved / house-only slots: unbettable and shaded RED in the UI.
+  const RESERVED = new Set([5,6,7,17,18,19,29,30,31]);
 
   // Symbols (logic) and glyphs (presentation).
   const SYMBOLS = {
@@ -461,7 +632,7 @@
     QUARK: 'QUARK',
   };
 
-  // Keep glyphs simple for cross-platform rendering.
+  // Simple glyphs for cross-platform reliability.
   const GLYPH = {
     BAR: '▮▮',
     ORB: '●',
@@ -474,10 +645,6 @@
     QUARK:'Q',
   };
 
-  /**
-   * A base repeating pattern. We then "seed shift" per ring and inject specials.
-   * This is deliberately easy to tune later.
-   */
   const COMMON_PATTERN = [
     SYMBOLS.BAR, SYMBOLS.ORB, SYMBOLS.COMET, SYMBOLS.BOLT,
     SYMBOLS.MOON, SYMBOLS.SUN, SYMBOLS.BOLT, SYMBOLS.ORB,
@@ -486,7 +653,7 @@
   function buildRing(seedShift = 0) {
     const ring = Array.from({ length: SLOTS }, (_, i) => COMMON_PATTERN[(i + seedShift) % COMMON_PATTERN.length]);
 
-    // Special placements (1-based positions)
+    // Specials (1-based placements)
     ring[17 - 1] = SYMBOLS.QUARK;
     ring[8  - 1] = SYMBOLS.SWIRL;
     ring[28 - 1] = SYMBOLS.SWIRL;
@@ -503,9 +670,9 @@
 
   /**
    * ==========================================================
-   * Randomness
+   * Randomness utilities
    * ==========================================================
-   * Prefer WebCrypto; fall back to Math.random if needed.
+   * Use WebCrypto when available; fall back to Math.random.
    */
   function randInt(minInclusive, maxExclusive) {
     const range = maxExclusive - minInclusive;
@@ -557,6 +724,17 @@
     ringA: document.getElementById('ringA'),
     ringB: document.getElementById('ringB'),
     ringC: document.getElementById('ringC'),
+
+    // Modal
+    modal: document.getElementById('resultModal'),
+    modalBackdrop: document.querySelector('#resultModal .modalBackdrop'),
+    modalPanel: document.querySelector('#resultModal .modalPanel'),
+    modalTitle: document.getElementById('modalTitle'),
+    modalSub: document.getElementById('modalSub'),
+    modalSummary: document.getElementById('modalSummary'),
+    modalRemark: document.getElementById('modalRemark'),
+    quarkAscii: document.getElementById('quarkAscii'),
+    modalOk: document.getElementById('modalOk'),
   };
 
   /**
@@ -566,13 +744,16 @@
    */
   const state = {
     bankroll: 1000,
-    selected: [],     // 1-based slot numbers (max 3)
+    selected: [],   // 1-based slot numbers (max 3)
     spinning: false,
 
-    // Rotation state in degrees (unwrapped, can go negative large)
+    // Rotation degrees for each symbol ring (unwrapped).
     rotA: 0,
     rotB: 0,
     rotC: 0,
+
+    // For focus restore after modal
+    lastFocusEl: null,
   };
 
   function setStatus(msg, kind='muted') {
@@ -594,7 +775,7 @@
 
   /**
    * ==========================================================
-   * Betting + validation
+   * Bet validation
    * ==========================================================
    */
   function validateBet(slotsCount) {
@@ -626,6 +807,7 @@
   function payoutMultiplier([sa, sb, sc]) {
     const trio = [sa, sb, sc].slice().sort().join('|');
     const jackpot = [SYMBOLS.QUARK, SYMBOLS.SWIRL, SYMBOLS.SWIRL].slice().sort().join('|');
+
     if (trio === jackpot) return 4000;
     if (sa === sb && sb === sc) return 100;
     if (sa === sb || sa === sc || sb === sc) return 5;
@@ -639,10 +821,6 @@
     return '--';
   }
 
-  /**
-   * For a slot N (1-based), apply offset mapping:
-   * symbol = ring[(N - 1 + offset) % 36]
-   */
   function symbolsAtSlot(slot1Based, offsets) {
     const i = (slot1Based - 1) % SLOTS;
     const sa = RING_A[(i + offsets.a) % SLOTS];
@@ -655,23 +833,17 @@
    * ==========================================================
    * SVG geometry helpers
    * ==========================================================
-   *
-   * We generate wedge paths for each of 36 sectors.
-   * Angles:
-   *   - slot 1 is centered at the top (12 o'clock).
-   *   - we use SVG polar coordinates where 0° is at the top by offsetting -90°.
    */
   const CX = 300, CY = 300;
 
   function degToRad(d) { return (d * Math.PI) / 180; }
 
-  // Convert polar angle (degrees) + radius to x,y. Angle 0° at top.
+  // Angle 0° points "up" (12 o'clock) due to subtracting 90°.
   function polar(cx, cy, r, angleDeg) {
     const a = degToRad(angleDeg - 90);
     return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
   }
 
-  // Create a donut-sector wedge path from startAngle to endAngle.
   function wedgePath(rInner, rOuter, startDeg, endDeg) {
     const p1 = polar(CX, CY, rOuter, startDeg);
     const p2 = polar(CX, CY, rOuter, endDeg);
@@ -689,7 +861,7 @@
     ].join(' ');
   }
 
-  // Keep text upright-ish: if angle is on the bottom half, rotate 180°.
+  // Keep text mostly upright: flip 180° if on bottom half.
   function uprightTextRotation(angleDeg) {
     const a = ((angleDeg % 360) + 360) % 360;
     return (a > 90 && a < 270) ? 180 : 0;
@@ -699,12 +871,6 @@
    * ==========================================================
    * Wheel building
    * ==========================================================
-   *
-   * Radii (outer -> inner):
-   *   Slot ring: 240..280
-   *   Ring A:    195..235
-   *   Ring B:    150..190
-   *   Ring C:    105..145
    */
   const RAD = {
     slotIn: 240, slotOut: 280,
@@ -715,54 +881,48 @@
 
   function clearGroup(g) { while (g.firstChild) g.removeChild(g.firstChild); }
 
-  /**
-   * Build outer slot ring: fixed wedges with slot numbers, clickable.
-   */
   function buildSlotRing() {
     clearGroup(el.slotRing);
 
     for (let slot = 1; slot <= SLOTS; slot++) {
       const start = (slot - 1) * STEP_DEG;
       const end = slot * STEP_DEG;
+      const mid = start + STEP_DEG / 2;
 
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.classList.add('slotWedge');
       g.dataset.slot = String(slot);
 
-      const isHouse = UNBETTABLE.has(slot);
-      if (isHouse) g.classList.add('house');
+      const isReserved = RESERVED.has(slot);
+      if (isReserved) g.classList.add('house');
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', wedgePath(RAD.slotIn, RAD.slotOut, start, end));
+      path.setAttribute('stroke-width', '1.2');
 
-      // Bettable vs house styling
-      if (isHouse) {
-        path.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--houseFill') || 'rgba(255,208,122,0.22)');
-        path.setAttribute('stroke', getComputedStyle(document.documentElement).getPropertyValue('--houseStroke') || 'rgba(255,208,122,0.55)');
+      if (isReserved) {
+        path.setAttribute('fill', 'var(--reservedFill)');
+        path.setAttribute('stroke', 'var(--reservedStroke)');
       } else {
         path.setAttribute('fill', 'rgba(0,0,0,0.16)');
         path.setAttribute('stroke', 'rgba(120,255,160,0.16)');
       }
-      path.setAttribute('stroke-width', '1.2');
 
-      // Slot number text at mid-angle
-      const mid = start + STEP_DEG / 2;
       const pos = polar(CX, CY, (RAD.slotIn + RAD.slotOut) / 2, mid);
 
       const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       txt.classList.add('slotText');
-      if (isHouse) txt.classList.add('house');
+      if (isReserved) txt.classList.add('house');
       txt.setAttribute('x', pos.x);
       txt.setAttribute('y', pos.y);
       txt.setAttribute('text-anchor', 'middle');
       txt.setAttribute('dominant-baseline', 'middle');
       txt.textContent = String(slot);
 
-      // rotate text slightly to follow ring; flip on bottom half
       const flip = uprightTextRotation(mid);
       txt.setAttribute('transform', `rotate(${mid + flip} ${pos.x} ${pos.y})`);
 
-      if (!isHouse) {
+      if (!isReserved) {
         g.addEventListener('click', () => toggleSlot(slot));
       }
 
@@ -772,11 +932,6 @@
     }
   }
 
-  /**
-   * Build a symbol ring inside the wheel.
-   * - The ring itself is a rotating <g>.
-   * - Each sector is a wedge with a glyph text placed at its center.
-   */
   function buildSymbolRing(groupEl, ringSymbols, rInner, rOuter) {
     clearGroup(groupEl);
 
@@ -799,6 +954,7 @@
       const glyph = GLYPH[sym] ?? sym[0];
 
       const pos = polar(CX, CY, (rInner + rOuter) / 2, mid);
+
       const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       txt.classList.add('symbolGlyph');
       txt.setAttribute('x', pos.x);
@@ -807,7 +963,6 @@
       txt.setAttribute('dominant-baseline', 'middle');
       txt.textContent = glyph;
 
-      // Keep glyph roughly upright
       const flip = uprightTextRotation(mid);
       txt.setAttribute('transform', `rotate(${mid + flip} ${pos.x} ${pos.y})`);
 
@@ -818,17 +973,15 @@
   }
 
   /**
-   * Update selection highlight on the outer slot ring.
+   * ==========================================================
+   * Selection state (click/tap only)
+   * ==========================================================
    */
   function syncSelectionUI() {
-    // Slot wedge selected styling
-    const wedges = el.slotRing.querySelectorAll('g.slotWedge');
-    wedges.forEach(w => {
+    el.slotRing.querySelectorAll('g.slotWedge').forEach(w => {
       const slot = Number(w.dataset.slot);
       w.classList.toggle('selected', state.selected.includes(slot));
     });
-
-    // Chips list
     renderChips();
   }
 
@@ -838,6 +991,7 @@
       el.slotsHint.textContent = 'No slots selected.';
       return;
     }
+
     el.slotsHint.textContent = `Selected: ${state.selected.join(', ')}`;
 
     for (const slot of state.selected) {
@@ -854,7 +1008,7 @@
 
   function toggleSlot(slot) {
     if (state.spinning) return;
-    if (UNBETTABLE.has(slot)) return;
+    if (RESERVED.has(slot)) return;
 
     if (state.selected.includes(slot)) {
       state.selected = state.selected.filter(s => s !== slot);
@@ -874,44 +1028,31 @@
    * ==========================================================
    * Rotation + animation
    * ==========================================================
-   *
-   * We rotate SVG groups with transform="rotate(angle cx cy)".
-   * Positive angle rotates clockwise in SVG; we spin CCW by decreasing degrees.
+   * We rotate symbol rings with: rotate(deg cx cy)
+   * SVG positive degrees rotate clockwise; we spin CCW by using negative velocities.
    */
-
   function setGroupRotation(groupEl, deg) {
     groupEl.setAttribute('transform', `rotate(${deg} ${CX} ${CY})`);
   }
 
   function mod(n, m) { return ((n % m) + m) % m; }
 
-  // Ease-out curve for deceleration.
   function easeOutCubic(t) {
     return 1 - Math.pow(1 - t, 3);
   }
 
-  /**
-   * Compute a target degree that:
-   *  - ends at targetPhaseDeg modulo 360
-   *  - moves in the negative direction (CCW spin)
-   *  - includes several extra revolutions (for drama)
-   */
   function computeTargetDeg(currentDeg, targetPhaseDeg, extraRevs) {
     const curPhase = mod(currentDeg, 360);
     const tgtPhase = mod(targetPhaseDeg, 360);
 
-    // phaseDelta in (-360, 0] for CCW-only travel
+    // Delta in (-360, 0] for CCW-only travel:
     let phaseDelta = tgtPhase - curPhase;
     phaseDelta = mod(phaseDelta, 360);
     if (phaseDelta > 0) phaseDelta -= 360;
 
-    // additional full spins (negative)
     return currentDeg + phaseDelta - (extraRevs * 360);
   }
 
-  /**
-   * Ring animation object: cruise then decel.
-   */
   function makeAnim(getDeg, setDeg) {
     return {
       phase: 'idle',
@@ -971,7 +1112,7 @@
 
   /**
    * ==========================================================
-   * Results rendering
+   * Results table rendering
    * ==========================================================
    */
   function renderResults(rows) {
@@ -991,6 +1132,132 @@
     }
     el.resultsTable.style.display = '';
   }
+
+  /**
+   * ==========================================================
+   * Quark modal dialog
+   * ==========================================================
+   * Requirements:
+   *  - OK button to continue
+   *  - Quark jape/remark
+   *  - Large, clear ASCII Quark
+   *  - Aesthetic matches terminal
+   *  - Esc/backdrop closes; focus restored to Spin
+   */
+
+  // Big ASCII “Quark-ish” Ferengi bartender vibe (original, not show quotes/art).
+  const QUARK_ASCII = String.raw`
+                       ______________________________
+                      /                              \
+             ________/   QUARK'S FRIENDLY ADVICE      \________
+            /   ____  \                                /  ____  \
+           /   /    \  \____                    ____  /  /    \  \
+          |   |  ()  |      \__________________/      |  |  ()  |  |
+          |   |      |   .----.   .----.   .----.     |  |      |  |
+          |   |  __  |  / ____ \ / ____ \ / ____ \    |  |  __  |  |
+          |   | /  \ | | |    | | |    | | |    | |   | | /  \ |  |
+          |   | \__/ | | |____| | |____| | |____| |   | | \__/ |  |
+          |   |      |  \______/ \______/ \______/    |  |      |  |
+          |   |______|     .--------------------.      |  |______|  |
+          |      __        |  LATINUM COUNTS.    |      |      __    |
+          |     /  \       |  HONOR IS OPTIONAL. |      |     /  \   |
+          |    / /\ \      '--------------------'      |    / /\ \  |
+          |   /_/  \_\      ___      ___      ___      |   /_/  \_\ |
+          |    /      \    /___\    /___\    /___\     |    /      \|
+          |   /  /\    \     |        |        |       |   /  /\    \
+          |  /__/  \____\    |        |        |       |  /__/  \____\
+          |      (  )        |        |        |       |      (  )
+          |       \/        _|_      _|_      _|_      |       \/
+          |__________________________________________________________|
+`;
+
+  const QUARK_REMARKS = {
+    jackpot: [
+      "That’s not luck — that’s destiny with a tab.",
+      "Jackpot! I’ll just… hold onto your winnings for “safekeeping.”",
+      "You hit the big one. Try not to faint on my floor.",
+    ],
+    win: [
+      "A profit! I’m thrilled. Deeply. Spiritually. Now spin again.",
+      "See? The wheel likes you. I’m not jealous. Not at all.",
+      "Winnings! Don’t spend it all on ethics and self-respect.",
+    ],
+    loss: [
+      "A learning experience! For you. Financially.",
+      "The wheel is innocent. Your strategy, however…",
+      "No hit. But think of the character you’re building. Very expensive character.",
+    ]
+  };
+
+  function pick(arr) {
+    return arr[randInt(0, arr.length)];
+  }
+
+  function openModal({ title, sub, summaryHTML, remark }) {
+    state.lastFocusEl = document.activeElement;
+
+    el.modalTitle.textContent = title;
+    el.modalSub.textContent = sub;
+    el.modalSummary.innerHTML = summaryHTML;
+    el.modalRemark.textContent = remark;
+    el.quarkAscii.textContent = QUARK_ASCII;
+
+    el.modal.classList.remove('hidden');
+
+    // Move focus to OK (best-practice for dialogs)
+    setTimeout(() => el.modalOk.focus(), 0);
+  }
+
+  function closeModal() {
+    el.modal.classList.add('hidden');
+
+    // Restore focus to a sensible place (Spin button preferred)
+    const restore = state.lastFocusEl;
+    state.lastFocusEl = null;
+
+    if (restore && typeof restore.focus === 'function') restore.focus();
+    else el.spinBtn.focus();
+  }
+
+  function showResultModal({ stake, won, net, bankroll }) {
+    let title, sub, remarkKey;
+
+    if (won > 0 && net > 0) {
+      title = (won >= stake * 1000) ? "JACKPOT RESULT" : "WIN RESULT";
+      sub = "The wheel has spoken. Quark has opinions.";
+      remarkKey = (won >= stake * 1000) ? "jackpot" : "win";
+    } else if (won === 0) {
+      title = "LOSS RESULT";
+      sub = "The wheel has spoken. Quark has… relief.";
+      remarkKey = "loss";
+    } else {
+      title = "RESULT";
+      sub = "Quark is calculating your value as a customer.";
+      remarkKey = "loss";
+    }
+
+    const summaryHTML = `
+      <div><b>Stake:</b> ${stake}</div>
+      <div><b>Winnings:</b> ${won}</div>
+      <div><b>Net:</b> ${net}</div>
+      <div><b>Bankroll:</b> ${bankroll}</div>
+    `;
+
+    openModal({
+      title,
+      sub,
+      summaryHTML,
+      remark: pick(QUARK_REMARKS[remarkKey]),
+    });
+  }
+
+  // Modal closing behaviors
+  el.modalOk.addEventListener('click', closeModal);
+  el.modalBackdrop.addEventListener('click', closeModal);
+  window.addEventListener('keydown', (e) => {
+    if (el.modal.classList.contains('hidden')) return;
+    if (e.key === 'Escape') closeModal();
+  });
 
   /**
    * ==========================================================
@@ -1029,14 +1296,12 @@
       c: randInt(0, SLOTS),
     };
 
-    // Desired final phase degrees for each ring:
-    // angle = -offset * 10° (CCW) to match symbolAtSlot mapping.
+    // Desired final phase degrees: angle = -offset * 10° (CCW)
     const targetPhaseA = -final.a * STEP_DEG;
     const targetPhaseB = -final.b * STEP_DEG;
     const targetPhaseC = -final.c * STEP_DEG;
 
     if (prefersReducedMotion()) {
-      // Snap directly to phases.
       state.rotA = targetPhaseA; state.rotB = targetPhaseB; state.rotC = targetPhaseC;
       setGroupRotation(el.ringA, state.rotA);
       setGroupRotation(el.ringB, state.rotB);
@@ -1048,22 +1313,21 @@
       animB.phase = 'cruise'; animB.vel = -randInt(260, 340);
       animC.phase = 'cruise'; animC.vel = -randInt(300, 420);
 
-      // Compute deterministic end degrees with extra revolutions.
+      // Deterministic end degrees with extra revolutions.
       const endA = computeTargetDeg(state.rotA, targetPhaseA, randInt(5, 9));
       const endB = computeTargetDeg(state.rotB, targetPhaseB, randInt(6, 10));
       const endC = computeTargetDeg(state.rotC, targetPhaseC, randInt(7, 11));
 
-      // Start the animation loop.
       const loop = runUntilStop();
 
-      // Sequential stop timings: A then B then C (like a physical wheel settling).
+      // Sequential stops: A then B then C
       setTimeout(() => startDecel(animA, performance.now(), endA, randInt(900, 1400)), randInt(700, 1000));
       setTimeout(() => startDecel(animB, performance.now(), endB, randInt(950, 1500)), randInt(950, 1250));
       setTimeout(() => startDecel(animC, performance.now(), endC, randInt(1000, 1600)), randInt(1200, 1500));
 
       await loop;
 
-      // Snap exactly to final phases after stop (guards against float drift).
+      // Snap exactly to phase to avoid drift.
       state.rotA = targetPhaseA;
       state.rotB = targetPhaseB;
       state.rotC = targetPhaseC;
@@ -1072,7 +1336,7 @@
       setGroupRotation(el.ringC, state.rotC);
     }
 
-    // Evaluate results from final offsets (not from degrees).
+    // Evaluate results
     const rows = [];
     let totalWin = 0;
 
@@ -1087,8 +1351,10 @@
     state.bankroll += totalWin;
     updateBankroll();
 
+    const net = totalWin - stake;
+
     el.spinMeta.textContent =
-      `Offsets: A=${final.a}, B=${final.b}, C=${final.c} — Staked ${stake}, Won ${totalWin}, Net ${totalWin - stake}`;
+      `Offsets: A=${final.a}, B=${final.b}, C=${final.c} — Staked ${stake}, Won ${totalWin}, Net ${net}`;
     renderResults(rows);
 
     if (totalWin > 0) setStatus('DABO! // PROFIT ACHIEVED', 'ok');
@@ -1100,6 +1366,14 @@
     }
 
     setSpinning(false);
+
+    // Show the Quark result dialog after the spin resolves
+    showResultModal({
+      stake,
+      won: totalWin,
+      net,
+      bankroll: state.bankroll
+    });
   }
 
   function resetAll() {
@@ -1108,7 +1382,6 @@
     state.bankroll = 1000;
     updateBankroll();
 
-    // Reset rotations to 0.
     state.rotA = 0; state.rotB = 0; state.rotC = 0;
     setGroupRotation(el.ringA, 0);
     setGroupRotation(el.ringB, 0);
@@ -1138,7 +1411,6 @@
     buildSymbolRing(el.ringB, RING_B, RAD.bIn, RAD.bOut);
     buildSymbolRing(el.ringC, RING_C, RAD.cIn, RAD.cOut);
 
-    // Initial rotations
     setGroupRotation(el.ringA, state.rotA);
     setGroupRotation(el.ringB, state.rotB);
     setGroupRotation(el.ringC, state.rotC);
@@ -1158,9 +1430,9 @@
       if (state.selected.length > 0) validateBet(state.selected.length);
     });
 
-    // If the user zooms/resizes, SVG scales automatically.
-    // We only need to re-sync selection UI (safe and cheap).
-    window.addEventListener('resize', () => syncSelectionUI(), { passive: true });
+    // If modal is open and user rotates device, layout is already responsive via CSS.
+    // Still, we can re-sync selection highlight safely.
+    window.addEventListener('resize', () => syncSelectionUI(), { passive:true });
   }
 
   init();
