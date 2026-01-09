@@ -5,26 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>DABO // Ferengi Wheel</title>
 
-  <!--
-    ==========================================================
-    DABO — Ferengi Wheel (Single-file static app)
-    ==========================================================
-    This file intentionally contains *everything*: CSS + SVG + JS.
-
-    Key features:
-      - Top-down SVG wheel: outer slot ring (clickable), 3 rotating symbol rings, fixed pointer.
-      - Reserved/house-only slots: RED shaded + high-contrast numbers, disabled from selection.
-      - Result modal dialog after each spin: summary + Quark jape + big ASCII Quark + OK.
-      - Responsive hardening (portrait/mobile): avoids letter-by-letter wrapping, uses clamp + breakpoints.
-      - Reduced motion: snaps results if prefers-reduced-motion is set.
-
-    Math/logic mapping:
-      - 36 slots => 10° per slot
-      - Each ring has an integer offset in [0..35]
-      - For slot N (1-based): symbol = ring[(N-1 + offset) % 36]
-      - To match visually, ring group rotates CCW by offset*10° => angle = -offset*10°
-  -->
-
   <style>
     :root{
       --bg0:#060707;
@@ -43,7 +23,6 @@
       --reservedStroke: rgba(255, 90, 90, 0.70);
       --reservedText: rgba(255, 245, 245, 0.98);
 
-      /* Layout */
       --radius: 16px;
       --gap: clamp(10px, 2.2vw, 16px);
       --wheelMax: 680px;
@@ -63,9 +42,6 @@
       overflow-x:hidden;
     }
 
-    /* IMPORTANT:
-       - We avoid overflow-wrap:anywhere globally because it can cause letter-by-letter breaks on narrow screens.
-       - Instead we apply safe wrapping to only the elements that need it, and use break-word (not anywhere). */
     .wrap{ max-width: 1120px; margin: 22px auto; padding: 0 16px 40px; }
 
     .frame{
@@ -89,8 +65,6 @@
         inset 0 0 40px rgba(0,0,0,0.6);
       overflow:hidden;
     }
-
-    /* CRT scanlines */
     .terminal:before{
       content:"";
       position:absolute; inset:0;
@@ -136,8 +110,8 @@
       letter-spacing: 0.09em;
       color: rgba(183,255,191,0.75);
       max-width: 100%;
-      word-break: normal;
       overflow-wrap: break-word;
+      word-break: normal;
     }
 
     .statusrow{
@@ -161,12 +135,8 @@
       letter-spacing: 0.06em;
       user-select:none;
 
-      /* Desktop flow stays clean */
-      white-space: nowrap;
+      white-space: nowrap; /* desktop */
 
-      /* Avoid mid-letter breaks */
-      word-break: normal;
-      overflow-wrap: normal;
       min-width: 0;
       max-width: 100%;
     }
@@ -208,14 +178,12 @@
       color: rgba(183,255,191,0.68);
       font-size: 12px;
       line-height: 1.4;
-      word-break: normal;
       overflow-wrap: break-word;
     }
     .monoSmall{
       font-size: 11px;
       letter-spacing:0.10em;
       color: rgba(183,255,191,0.82);
-      word-break: normal;
       overflow-wrap: break-word;
     }
     .warn{ color: var(--warn); }
@@ -292,7 +260,6 @@
       border: 1px solid rgba(210,168,75,0.25);
     }
 
-    /* Wheel container: stays circular and scales responsibly */
     .wheelShell{
       display:grid;
       place-items:center;
@@ -310,7 +277,6 @@
       user-select:none;
     }
 
-    /* SVG styling */
     .slotWedge{ cursor:pointer; }
     .slotWedge.house{ cursor:not-allowed; }
 
@@ -344,9 +310,7 @@
       user-select:none;
     }
 
-    /* ===========================
-       Modal dialog (Quark jape)
-       =========================== */
+    /* Modal */
     .modal.hidden{ display:none; }
     .modal{
       position:fixed;
@@ -405,6 +369,8 @@
       min-width:0;
       overflow:auto;
     }
+
+    /* Responsive ASCII: always fully visible, never scrolls */
     .ascii{
       margin:0;
       padding: 12px;
@@ -414,15 +380,17 @@
       box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
       color: rgba(247,213,126,0.95);
 
-      /* Big and readable; clamps down for tiny screens */
-      font-size: clamp(10px, 1.7vw, 14px);
+      font-size: var(--asciiSize, clamp(10px, 1.7vw, 14px));
       line-height: 1.05;
 
-      /* Keep ASCII intact; allow scrolling rather than mangling */
       white-space: pre;
-      overflow: auto;
+      overflow: hidden;
+
       max-width: 100%;
+      max-height: min(52vh, 420px);
+      min-width: 0;
     }
+
     .modalCopy{
       min-width:0;
       display:flex;
@@ -451,26 +419,25 @@
       justify-content:flex-end;
       gap: 10px;
     }
-    .modalOk{ }
+
+    @media (max-width: 760px){
+      .modalBody{ grid-template-columns: 1fr; }
+    }
 
     /* Portrait/mobile breakpoints: fix wrapping WITHOUT hurting desktop */
     @media (max-width: 520px){
       .statusrow{ justify-content:flex-start; }
-      .pill{
-        white-space: normal;           /* allow wrap on small screens */
-        letter-spacing: 0.05em;
-      }
+      .pill{ white-space: normal; letter-spacing: 0.05em; }
       .title{ gap: 6px; }
       .title h1{ letter-spacing: 0.08em; }
       .subtitle{ letter-spacing: 0.05em; }
-      .modalBody{ grid-template-columns: 1fr; }
-      .ascii{ font-size: clamp(10px, 3.2vw, 13px); }
+      .ascii{ max-height: min(42vh, 340px); }
     }
 
-    /* Short-height devices (landscape phones) */
     @media (max-height: 560px){
       .modalPanel{ max-height: 92vh; }
       .modalBody{ padding: 10px; }
+      .ascii{ max-height: min(36vh, 280px); }
     }
 
     @media (prefers-reduced-motion: reduce){
@@ -513,22 +480,16 @@
                 </defs>
                 <rect x="0" y="0" width="600" height="600" fill="url(#wheelGlow)"></rect>
 
-                <!-- Outer rim -->
                 <circle cx="300" cy="300" r="285" fill="rgba(0,0,0,0.18)" stroke="rgba(247,213,126,0.22)" stroke-width="3"></circle>
 
-                <!-- Slot ring (fixed, clickable) -->
                 <g id="slotRing"></g>
-
-                <!-- Rotating symbol rings -->
                 <g id="ringA"></g>
                 <g id="ringB"></g>
                 <g id="ringC"></g>
 
-                <!-- Hub -->
                 <circle cx="300" cy="300" r="70" fill="rgba(0,0,0,0.35)" stroke="rgba(120,255,160,0.14)" stroke-width="2"></circle>
                 <text x="300" y="305" text-anchor="middle" class="symbolGlyph" style="font-size:20px; letter-spacing:0.18em;">DABO</text>
 
-                <!-- Pointer at top -->
                 <polygon points="300,18 290,38 310,38" fill="rgba(247,213,126,0.85)" stroke="rgba(0,0,0,0.6)" stroke-width="2"></polygon>
               </svg>
             </div>
@@ -571,6 +532,15 @@
               <button id="resetBtn">Reset</button>
             </div>
 
+            <label style="margin-top:14px;">AUDIO</label>
+            <div class="ctaRow" style="align-items:center;">
+              <button id="muteBtn" type="button">SFX: ON</button>
+              <input id="volSlider" type="range" min="0" max="100" value="70" style="width:min(260px, 100%);" />
+            </div>
+            <div class="muted" id="audioHint" style="margin-top:6px;">
+              Audio begins after a click (browser autoplay rules).
+            </div>
+
             <div class="muted" style="margin-top: 14px;">
               Reduce Motion enabled? The wheel snaps to results.
             </div>
@@ -581,7 +551,7 @@
     </div>
   </div>
 
-  <!-- Result modal (Quark terminal dialog) -->
+  <!-- Result modal -->
   <div id="resultModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modalBackdrop" data-close="1"></div>
     <div class="modalPanel" tabindex="-1">
@@ -590,7 +560,7 @@
         <div id="modalSub" class="modalSub">Quark’s assessment pending…</div>
       </div>
       <div class="modalBody">
-        <pre id="quarkAscii" class="ascii" aria-label="ASCII art of Quark"></pre>
+        <pre id="quarkAscii" class="ascii" aria-label="ASCII art"></pre>
         <div class="modalCopy">
           <div id="modalSummary" class="modalSummary"></div>
           <div id="modalRemark" class="modalRemark"></div>
@@ -606,43 +576,23 @@
 (() => {
   'use strict';
 
-  /**
-   * ==========================================================
-   * Constants / configuration
-   * ==========================================================
-   */
+  // ========= Config =========
   const SLOTS = 36;
-  const STEP_DEG = 360 / SLOTS; // 10 degrees per slot
+  const STEP_DEG = 360 / SLOTS; // 10 deg
   const MIN_BET = 10;
   const MAX_BET = 100;
 
-  // Reserved / house-only slots: unbettable and shaded RED in the UI.
+  // Reserved / house-only slots
   const RESERVED = new Set([5,6,7,17,18,19,29,30,31]);
 
-  // Symbols (logic) and glyphs (presentation).
   const SYMBOLS = {
-    BAR: 'BAR',
-    ORB: 'ORB',
-    COMET: 'COMET',
-    BOLT: 'BOLT',
-    MOON: 'MOON',
-    SUN: 'SUN',
-    SWIRL: 'SWIRL',
-    DS9: 'DS9',
-    QUARK: 'QUARK',
+    BAR: 'BAR', ORB: 'ORB', COMET: 'COMET', BOLT: 'BOLT',
+    MOON: 'MOON', SUN: 'SUN', SWIRL: 'SWIRL', DS9: 'DS9', QUARK: 'QUARK'
   };
 
-  // Simple glyphs for cross-platform reliability.
   const GLYPH = {
-    BAR: '▮▮',
-    ORB: '●',
-    COMET: '☄',
-    BOLT: '⚡',
-    MOON: '☾',
-    SUN:  '☉',
-    SWIRL:'🌀',
-    DS9:  '⬡',
-    QUARK:'Q',
+    BAR: '▮▮', ORB: '●', COMET: '☄', BOLT: '⚡',
+    MOON: '☾', SUN: '☉', SWIRL:'🌀', DS9:'⬡', QUARK:'Q'
   };
 
   const COMMON_PATTERN = [
@@ -652,15 +602,12 @@
 
   function buildRing(seedShift = 0) {
     const ring = Array.from({ length: SLOTS }, (_, i) => COMMON_PATTERN[(i + seedShift) % COMMON_PATTERN.length]);
-
-    // Specials (1-based placements)
     ring[17 - 1] = SYMBOLS.QUARK;
     ring[8  - 1] = SYMBOLS.SWIRL;
     ring[28 - 1] = SYMBOLS.SWIRL;
     ring[11 - 1] = SYMBOLS.DS9;
     ring[22 - 1] = SYMBOLS.DS9;
     ring[34 - 1] = SYMBOLS.DS9;
-
     return ring;
   }
 
@@ -668,12 +615,7 @@
   const RING_B = buildRing(3);
   const RING_C = buildRing(5);
 
-  /**
-   * ==========================================================
-   * Randomness utilities
-   * ==========================================================
-   * Use WebCrypto when available; fall back to Math.random.
-   */
+  // ========= RNG =========
   function randInt(minInclusive, maxExclusive) {
     const range = maxExclusive - minInclusive;
     if (range <= 0) return minInclusive;
@@ -684,10 +626,7 @@
         const limit = maxUint - (maxUint % range);
         const buf = new Uint32Array(1);
         let x;
-        do {
-          globalThis.crypto.getRandomValues(buf);
-          x = buf[0];
-        } while (x >= limit);
+        do { globalThis.crypto.getRandomValues(buf); x = buf[0]; } while (x >= limit);
         return minInclusive + (x % range);
       }
     } catch (_) {}
@@ -698,11 +637,7 @@
     return globalThis.matchMedia && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
-  /**
-   * ==========================================================
-   * DOM bindings
-   * ==========================================================
-   */
+  // ========= DOM =========
   const el = {
     bankrollVal: document.getElementById('bankrollVal'),
     betInput: document.getElementById('betInput'),
@@ -725,10 +660,14 @@
     ringB: document.getElementById('ringB'),
     ringC: document.getElementById('ringC'),
 
+    // Audio UI
+    muteBtn: document.getElementById('muteBtn'),
+    volSlider: document.getElementById('volSlider'),
+    audioHint: document.getElementById('audioHint'),
+
     // Modal
     modal: document.getElementById('resultModal'),
     modalBackdrop: document.querySelector('#resultModal .modalBackdrop'),
-    modalPanel: document.querySelector('#resultModal .modalPanel'),
     modalTitle: document.getElementById('modalTitle'),
     modalSub: document.getElementById('modalSub'),
     modalSummary: document.getElementById('modalSummary'),
@@ -737,22 +676,12 @@
     modalOk: document.getElementById('modalOk'),
   };
 
-  /**
-   * ==========================================================
-   * State
-   * ==========================================================
-   */
+  // ========= State =========
   const state = {
     bankroll: 1000,
-    selected: [],   // 1-based slot numbers (max 3)
+    selected: [],
     spinning: false,
-
-    // Rotation degrees for each symbol ring (unwrapped).
-    rotA: 0,
-    rotB: 0,
-    rotC: 0,
-
-    // For focus restore after modal
+    rotA: 0, rotB: 0, rotC: 0,
     lastFocusEl: null,
   };
 
@@ -760,11 +689,7 @@
     el.statusLine.className = `monoSmall ${kind}`;
     el.statusLine.textContent = msg;
   }
-
-  function updateBankroll() {
-    el.bankrollVal.textContent = String(state.bankroll);
-  }
-
+  function updateBankroll() { el.bankrollVal.textContent = String(state.bankroll); }
   function setSpinning(on) {
     state.spinning = on;
     el.spinBtn.disabled = on;
@@ -773,11 +698,7 @@
     el.betInput.disabled = on;
   }
 
-  /**
-   * ==========================================================
-   * Bet validation
-   * ==========================================================
-   */
+  // ========= Bet validation =========
   function validateBet(slotsCount) {
     const betRaw = el.betInput.value.trim();
     const bet = betRaw === '' ? MIN_BET : Number(betRaw);
@@ -799,28 +720,21 @@
     return { ok:true, bet };
   }
 
-  /**
-   * ==========================================================
-   * Payout rules
-   * ==========================================================
-   */
+  // ========= Payouts =========
   function payoutMultiplier([sa, sb, sc]) {
     const trio = [sa, sb, sc].slice().sort().join('|');
     const jackpot = [SYMBOLS.QUARK, SYMBOLS.SWIRL, SYMBOLS.SWIRL].slice().sort().join('|');
-
     if (trio === jackpot) return 4000;
     if (sa === sb && sb === sc) return 100;
     if (sa === sb || sa === sc || sb === sc) return 5;
     return 0;
   }
-
   function matchLabel(mult) {
     if (mult === 4000) return 'JACK';
     if (mult === 100) return '3K';
     if (mult === 5) return '2K';
     return '--';
   }
-
   function symbolsAtSlot(slot1Based, offsets) {
     const i = (slot1Based - 1) % SLOTS;
     const sa = RING_A[(i + offsets.a) % SLOTS];
@@ -829,29 +743,26 @@
     return [sa, sb, sc];
   }
 
-  /**
-   * ==========================================================
-   * SVG geometry helpers
-   * ==========================================================
-   */
+  // ========= SVG geometry =========
   const CX = 300, CY = 300;
+  const RAD = {
+    slotIn: 240, slotOut: 280,
+    aIn: 195, aOut: 235,
+    bIn: 150, bOut: 190,
+    cIn: 105, cOut: 145,
+  };
 
   function degToRad(d) { return (d * Math.PI) / 180; }
-
-  // Angle 0° points "up" (12 o'clock) due to subtracting 90°.
   function polar(cx, cy, r, angleDeg) {
     const a = degToRad(angleDeg - 90);
     return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
   }
-
   function wedgePath(rInner, rOuter, startDeg, endDeg) {
     const p1 = polar(CX, CY, rOuter, startDeg);
     const p2 = polar(CX, CY, rOuter, endDeg);
     const p3 = polar(CX, CY, rInner, endDeg);
     const p4 = polar(CX, CY, rInner, startDeg);
-
     const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
-
     return [
       `M ${p1.x} ${p1.y}`,
       `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p2.x} ${p2.y}`,
@@ -860,24 +771,10 @@
       'Z'
     ].join(' ');
   }
-
-  // Keep text mostly upright: flip 180° if on bottom half.
   function uprightTextRotation(angleDeg) {
     const a = ((angleDeg % 360) + 360) % 360;
     return (a > 90 && a < 270) ? 180 : 0;
   }
-
-  /**
-   * ==========================================================
-   * Wheel building
-   * ==========================================================
-   */
-  const RAD = {
-    slotIn: 240, slotOut: 280,
-    aIn: 195, aOut: 235,
-    bIn: 150, bOut: 190,
-    cIn: 105, cOut: 145,
-  };
 
   function clearGroup(g) { while (g.firstChild) g.removeChild(g.firstChild); }
 
@@ -922,9 +819,7 @@
       const flip = uprightTextRotation(mid);
       txt.setAttribute('transform', `rotate(${mid + flip} ${pos.x} ${pos.y})`);
 
-      if (!isReserved) {
-        g.addEventListener('click', () => toggleSlot(slot));
-      }
+      if (!isReserved) g.addEventListener('click', () => toggleSlot(slot));
 
       g.appendChild(path);
       g.appendChild(txt);
@@ -936,13 +831,9 @@
     clearGroup(groupEl);
 
     for (let i = 0; i < SLOTS; i++) {
-      const slot = i + 1;
       const start = i * STEP_DEG;
       const end = (i + 1) * STEP_DEG;
       const mid = start + STEP_DEG / 2;
-
-      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      g.dataset.slot = String(slot);
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', wedgePath(rInner, rOuter, start, end));
@@ -966,17 +857,12 @@
       const flip = uprightTextRotation(mid);
       txt.setAttribute('transform', `rotate(${mid + flip} ${pos.x} ${pos.y})`);
 
-      g.appendChild(path);
-      g.appendChild(txt);
-      groupEl.appendChild(g);
+      groupEl.appendChild(path);
+      groupEl.appendChild(txt);
     }
   }
 
-  /**
-   * ==========================================================
-   * Selection state (click/tap only)
-   * ==========================================================
-   */
+  // ========= Selection =========
   function syncSelectionUI() {
     el.slotRing.querySelectorAll('g.slotWedge').forEach(w => {
       const slot = Number(w.dataset.slot);
@@ -991,7 +877,6 @@
       el.slotsHint.textContent = 'No slots selected.';
       return;
     }
-
     el.slotsHint.textContent = `Selected: ${state.selected.join(', ')}`;
 
     for (const slot of state.selected) {
@@ -1019,36 +904,22 @@
     syncSelectionUI();
   }
 
-  function clearSelection() {
-    state.selected = [];
-    syncSelectionUI();
-  }
+  function clearSelection() { state.selected = []; syncSelectionUI(); }
 
-  /**
-   * ==========================================================
-   * Rotation + animation
-   * ==========================================================
-   * We rotate symbol rings with: rotate(deg cx cy)
-   * SVG positive degrees rotate clockwise; we spin CCW by using negative velocities.
-   */
+  // ========= Rotation + animation =========
   function setGroupRotation(groupEl, deg) {
     groupEl.setAttribute('transform', `rotate(${deg} ${CX} ${CY})`);
   }
-
   function mod(n, m) { return ((n % m) + m) % m; }
-
-  function easeOutCubic(t) {
-    return 1 - Math.pow(1 - t, 3);
-  }
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
   function computeTargetDeg(currentDeg, targetPhaseDeg, extraRevs) {
     const curPhase = mod(currentDeg, 360);
     const tgtPhase = mod(targetPhaseDeg, 360);
 
-    // Delta in (-360, 0] for CCW-only travel:
     let phaseDelta = tgtPhase - curPhase;
     phaseDelta = mod(phaseDelta, 360);
-    if (phaseDelta > 0) phaseDelta -= 360;
+    if (phaseDelta > 0) phaseDelta -= 360; // CCW-only
 
     return currentDeg + phaseDelta - (extraRevs * 360);
   }
@@ -1057,7 +928,7 @@
     return {
       phase: 'idle',
       getDeg, setDeg,
-      vel: 0, // deg/sec (negative for CCW)
+      vel: 0,
       decelStartDeg: 0,
       decelEndDeg: 0,
       decelStartMs: 0,
@@ -1065,9 +936,9 @@
     };
   }
 
-  const animA = makeAnim(() => state.rotA, (d) => { state.rotA = d; setGroupRotation(el.ringA, d); });
-  const animB = makeAnim(() => state.rotB, (d) => { state.rotB = d; setGroupRotation(el.ringB, d); });
-  const animC = makeAnim(() => state.rotC, (d) => { state.rotC = d; setGroupRotation(el.ringC, d); });
+  const animA = makeAnim(() => state.rotA, d => { state.rotA = d; setGroupRotation(el.ringA, d); });
+  const animB = makeAnim(() => state.rotB, d => { state.rotB = d; setGroupRotation(el.ringB, d); });
+  const animC = makeAnim(() => state.rotC, d => { state.rotC = d; setGroupRotation(el.ringC, d); });
 
   function startDecel(anim, nowMs, endDeg, durMs) {
     anim.phase = 'decel';
@@ -1110,11 +981,7 @@
     });
   }
 
-  /**
-   * ==========================================================
-   * Results table rendering
-   * ==========================================================
-   */
+  // ========= Results table =========
   function renderResults(rows) {
     el.resultsBody.innerHTML = '';
     for (const r of rows) {
@@ -1133,20 +1000,195 @@
     el.resultsTable.style.display = '';
   }
 
-  /**
-   * ==========================================================
-   * Quark modal dialog
-   * ==========================================================
-   * Requirements:
-   *  - OK button to continue
-   *  - Quark jape/remark
-   *  - Large, clear ASCII Quark
-   *  - Aesthetic matches terminal
-   *  - Esc/backdrop closes; focus restored to Spin
-   */
+  // ========= AudioEngine (WebAudio synth) =========
+  class AudioEngine {
+    constructor() {
+      this.ctx = null;
+      this.master = null;
+      this.enabled = true;
+      this.volume = 0.70;
 
-  // Big ASCII “Quark-ish” Ferengi bartender vibe (original, not show quotes/art).
-  const QUARK_ASCII = String.raw`
+      this.spinSrc = null;
+      this.spinGain = null;
+      this.spinFilter = null;
+      this.lfo = null;
+      this.lfoGain = null;
+    }
+
+    loadPrefs() {
+      const enabled = localStorage.getItem('dabo_audio_enabled');
+      const vol = localStorage.getItem('dabo_audio_volume');
+      if (enabled !== null) this.enabled = enabled === '1';
+      if (vol !== null) this.volume = Math.max(0, Math.min(1, Number(vol)));
+    }
+    savePrefs() {
+      localStorage.setItem('dabo_audio_enabled', this.enabled ? '1' : '0');
+      localStorage.setItem('dabo_audio_volume', String(this.volume));
+    }
+
+    async ensureReady() {
+      if (!this.enabled) return;
+      if (!this.ctx) {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = this.volume;
+        this.master.connect(this.ctx.destination);
+      }
+      if (this.ctx.state !== 'running') await this.ctx.resume();
+    }
+
+    setEnabled(on) {
+      this.enabled = !!on;
+      if (!this.enabled) this.stopSpin(true);
+      this.savePrefs();
+    }
+    setVolume(v01) {
+      this.volume = Math.max(0, Math.min(1, v01));
+      if (this.master) this.master.gain.value = this.volume;
+      this.savePrefs();
+    }
+
+    _noiseBuffer(seconds = 1.0) {
+      const sr = this.ctx.sampleRate;
+      const len = Math.floor(sr * seconds);
+      const buf = this.ctx.createBuffer(1, len, sr);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * 0.6;
+      return buf;
+    }
+
+    startSpin() {
+      if (!this.enabled || !this.ctx) return;
+      this.stopSpin(true);
+
+      const src = this.ctx.createBufferSource();
+      src.buffer = this._noiseBuffer(1.0);
+      src.loop = true;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 900;
+      filter.Q.value = 0.8;
+
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0, this.ctx.currentTime);
+      g.gain.linearRampToValueAtTime(0.40, this.ctx.currentTime + 0.10);
+
+      const lfo = this.ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = 3.5;
+
+      const lfoGain = this.ctx.createGain();
+      lfoGain.gain.value = 450;
+
+      lfo.connect(lfoGain);
+      lfoGain.connect(filter.frequency);
+
+      src.connect(filter);
+      filter.connect(g);
+      g.connect(this.master);
+
+      src.start();
+      lfo.start();
+
+      this.spinSrc = src;
+      this.spinFilter = filter;
+      this.spinGain = g;
+      this.lfo = lfo;
+      this.lfoGain = lfoGain;
+    }
+
+    stopSpin(immediate = false) {
+      if (!this.spinSrc || !this.ctx) return;
+      const t = this.ctx.currentTime;
+      try {
+        if (this.spinGain) {
+          this.spinGain.gain.cancelScheduledValues(t);
+          this.spinGain.gain.setValueAtTime(this.spinGain.gain.value, t);
+          this.spinGain.gain.linearRampToValueAtTime(0.0, t + (immediate ? 0.02 : 0.25));
+        }
+        this.spinSrc.stop(t + (immediate ? 0.03 : 0.28));
+        if (this.lfo) this.lfo.stop(t + (immediate ? 0.03 : 0.28));
+      } catch (_) {}
+
+      this.spinSrc = null;
+      this.spinGain = null;
+      this.spinFilter = null;
+      this.lfo = null;
+      this.lfoGain = null;
+    }
+
+    _beep(freq, dur, type='sine', gain=0.18, when=0) {
+      if (!this.enabled || !this.ctx) return;
+      const t0 = this.ctx.currentTime + when;
+
+      const o = this.ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0, t0);
+      g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+      o.connect(g);
+      g.connect(this.master);
+      o.start(t0);
+      o.stop(t0 + dur + 0.02);
+    }
+
+    playWin() {
+      if (!this.enabled || !this.ctx) return;
+      this._beep(660, 0.16, 'triangle', 0.16, 0.00);
+      this._beep(880, 0.16, 'triangle', 0.16, 0.12);
+      this._beep(1320,0.18, 'triangle', 0.16, 0.24);
+    }
+
+    playLose() {
+      if (!this.enabled || !this.ctx) return;
+      this._beep(110, 0.20, 'sine', 0.22, 0.00);
+      this._beep(80,  0.24, 'sine', 0.18, 0.05);
+    }
+
+    // Generic win callout: system voice, not an impersonation.
+    sayDabo() {
+      if (!this.enabled) return;
+      if (!('speechSynthesis' in window)) return;
+
+      const u = new SpeechSynthesisUtterance('DABO!');
+      u.rate = 1.05;
+      u.pitch = 1.1;
+      u.volume = Math.max(0, Math.min(1, this.volume));
+
+      const voices = window.speechSynthesis.getVoices?.() || [];
+      const v = voices.find(v => /en/i.test(v.lang)) || voices[0];
+      if (v) u.voice = v;
+
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    }
+  }
+
+  const audio = new AudioEngine();
+  audio.loadPrefs();
+
+  // ========= ASCII fit =========
+  function fitAsciiToBox(preEl, minPx=8, maxPx=14) {
+    if (!preEl) return true;
+    let size = maxPx;
+    preEl.style.setProperty('--asciiSize', `${size}px`);
+
+    const fits = () => (preEl.scrollWidth <= preEl.clientWidth) && (preEl.scrollHeight <= preEl.clientHeight);
+
+    while (!fits() && size > minPx) {
+      size -= 0.5;
+      preEl.style.setProperty('--asciiSize', `${size}px`);
+    }
+    return fits();
+  }
+
+  // ========= Modal content =========
+  const QUARK_ASCII_BIG = String.raw`
                        ______________________________
                       /                              \
              ________/   QUARK'S FRIENDLY ADVICE      \________
@@ -1171,6 +1213,17 @@
           |__________________________________________________________|
 `;
 
+  const QUARK_ASCII_COMPACT = String.raw`
+   .-------------------.
+  /  QUARK'S ADVICE     \
+ |  LATINUM COUNTS.      |
+ |  HONOR COSTS EXTRA.   |
+  \____     ____     ____/
+      \___/    \___/
+        (  )  (  )
+         \/    \/
+`;
+
   const QUARK_REMARKS = {
     jackpot: [
       "That’s not luck — that’s destiny with a tab.",
@@ -1189,9 +1242,7 @@
     ]
   };
 
-  function pick(arr) {
-    return arr[randInt(0, arr.length)];
-  }
+  function pick(arr) { return arr[randInt(0, arr.length)]; }
 
   function openModal({ title, sub, summaryHTML, remark }) {
     state.lastFocusEl = document.activeElement;
@@ -1200,39 +1251,38 @@
     el.modalSub.textContent = sub;
     el.modalSummary.innerHTML = summaryHTML;
     el.modalRemark.textContent = remark;
-    el.quarkAscii.textContent = QUARK_ASCII;
 
+    el.quarkAscii.textContent = QUARK_ASCII_BIG;
     el.modal.classList.remove('hidden');
 
-    // Move focus to OK (best-practice for dialogs)
+    requestAnimationFrame(() => {
+      const ok = fitAsciiToBox(el.quarkAscii, 8, 14);
+      if (!ok) {
+        el.quarkAscii.textContent = QUARK_ASCII_COMPACT;
+        requestAnimationFrame(() => fitAsciiToBox(el.quarkAscii, 9, 16));
+      }
+    });
+
     setTimeout(() => el.modalOk.focus(), 0);
   }
 
   function closeModal() {
     el.modal.classList.add('hidden');
-
-    // Restore focus to a sensible place (Spin button preferred)
     const restore = state.lastFocusEl;
     state.lastFocusEl = null;
-
     if (restore && typeof restore.focus === 'function') restore.focus();
     else el.spinBtn.focus();
   }
 
   function showResultModal({ stake, won, net, bankroll }) {
     let title, sub, remarkKey;
-
     if (won > 0 && net > 0) {
       title = (won >= stake * 1000) ? "JACKPOT RESULT" : "WIN RESULT";
       sub = "The wheel has spoken. Quark has opinions.";
       remarkKey = (won >= stake * 1000) ? "jackpot" : "win";
-    } else if (won === 0) {
+    } else {
       title = "LOSS RESULT";
       sub = "The wheel has spoken. Quark has… relief.";
-      remarkKey = "loss";
-    } else {
-      title = "RESULT";
-      sub = "Quark is calculating your value as a customer.";
       remarkKey = "loss";
     }
 
@@ -1251,19 +1301,13 @@
     });
   }
 
-  // Modal closing behaviors
   el.modalOk.addEventListener('click', closeModal);
   el.modalBackdrop.addEventListener('click', closeModal);
   window.addEventListener('keydown', (e) => {
-    if (el.modal.classList.contains('hidden')) return;
-    if (e.key === 'Escape') closeModal();
+    if (!el.modal.classList.contains('hidden') && e.key === 'Escape') closeModal();
   });
 
-  /**
-   * ==========================================================
-   * Spin orchestration
-   * ==========================================================
-   */
+  // ========= Spin =========
   async function spin() {
     if (state.spinning) return;
 
@@ -1279,7 +1323,6 @@
     }
     const bet = vb.bet;
 
-    // Stake immediately.
     const stake = bet * state.selected.length;
     state.bankroll -= stake;
     updateBankroll();
@@ -1289,14 +1332,15 @@
     el.spinMeta.textContent = '';
     el.resultsTable.style.display = 'none';
 
-    // Choose final offsets per ring (0..35).
+    await audio.ensureReady();
+    audio.startSpin();
+
     const final = {
       a: randInt(0, SLOTS),
       b: randInt(0, SLOTS),
       c: randInt(0, SLOTS),
     };
 
-    // Desired final phase degrees: angle = -offset * 10° (CCW)
     const targetPhaseA = -final.a * STEP_DEG;
     const targetPhaseB = -final.b * STEP_DEG;
     const targetPhaseC = -final.c * STEP_DEG;
@@ -1308,26 +1352,22 @@
       setGroupRotation(el.ringC, state.rotC);
       animA.phase = animB.phase = animC.phase = 'stopped';
     } else {
-      // Cruise speeds (deg/sec), negative for CCW.
       animA.phase = 'cruise'; animA.vel = -randInt(220, 300);
       animB.phase = 'cruise'; animB.vel = -randInt(260, 340);
       animC.phase = 'cruise'; animC.vel = -randInt(300, 420);
 
-      // Deterministic end degrees with extra revolutions.
       const endA = computeTargetDeg(state.rotA, targetPhaseA, randInt(5, 9));
       const endB = computeTargetDeg(state.rotB, targetPhaseB, randInt(6, 10));
       const endC = computeTargetDeg(state.rotC, targetPhaseC, randInt(7, 11));
 
       const loop = runUntilStop();
 
-      // Sequential stops: A then B then C
       setTimeout(() => startDecel(animA, performance.now(), endA, randInt(900, 1400)), randInt(700, 1000));
       setTimeout(() => startDecel(animB, performance.now(), endB, randInt(950, 1500)), randInt(950, 1250));
       setTimeout(() => startDecel(animC, performance.now(), endC, randInt(1000, 1600)), randInt(1200, 1500));
 
       await loop;
 
-      // Snap exactly to phase to avoid drift.
       state.rotA = targetPhaseA;
       state.rotB = targetPhaseB;
       state.rotC = targetPhaseC;
@@ -1336,7 +1376,8 @@
       setGroupRotation(el.ringC, state.rotC);
     }
 
-    // Evaluate results
+    audio.stopSpin();
+
     const rows = [];
     let totalWin = 0;
 
@@ -1357,8 +1398,14 @@
       `Offsets: A=${final.a}, B=${final.b}, C=${final.c} — Staked ${stake}, Won ${totalWin}, Net ${net}`;
     renderResults(rows);
 
-    if (totalWin > 0) setStatus('DABO! // PROFIT ACHIEVED', 'ok');
-    else setStatus('NO HIT // REASSESS YOUR STRATEGY', 'muted');
+    if (net > 0) {
+      setStatus('DABO! // PROFIT ACHIEVED', 'ok');
+      audio.playWin();
+      audio.sayDabo(); // generic TTS “DABO!”
+    } else {
+      setStatus('NO HIT // REASSESS YOUR STRATEGY', 'muted');
+      audio.playLose();
+    }
 
     if (state.bankroll < MIN_BET) {
       setStatus('INSUFFICIENT FUNDS // RESET REQUIRED', 'bad');
@@ -1367,13 +1414,7 @@
 
     setSpinning(false);
 
-    // Show the Quark result dialog after the spin resolves
-    showResultModal({
-      stake,
-      won: totalWin,
-      net,
-      bankroll: state.bankroll
-    });
+    showResultModal({ stake, won: totalWin, net, bankroll: state.bankroll });
   }
 
   function resetAll() {
@@ -1390,7 +1431,6 @@
     animA.phase = animB.phase = animC.phase = 'idle';
 
     clearSelection();
-
     el.betInput.value = '';
     el.betHint.textContent = '';
     el.spinMeta.textContent = '';
@@ -1400,11 +1440,32 @@
     setStatus('SELECT SLOTS, ENTER BET, THEN SPIN.', 'muted');
   }
 
-  /**
-   * ==========================================================
-   * Init
-   * ==========================================================
-   */
+  // ========= Audio UI =========
+  function initAudioUI() {
+    el.volSlider.value = String(Math.round(audio.volume * 100));
+    el.muteBtn.textContent = audio.enabled ? 'SFX: ON' : 'SFX: OFF';
+
+    el.muteBtn.addEventListener('click', async () => {
+      audio.setEnabled(!audio.enabled);
+      el.muteBtn.textContent = audio.enabled ? 'SFX: ON' : 'SFX: OFF';
+      if (audio.enabled) {
+        await audio.ensureReady();
+        el.audioHint.textContent = 'Audio ready.';
+      } else {
+        el.audioHint.textContent = 'Audio muted.';
+      }
+    });
+
+    el.volSlider.addEventListener('input', () => {
+      audio.setVolume(Number(el.volSlider.value) / 100);
+    });
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+  }
+
+  // ========= Init =========
   function init() {
     buildSlotRing();
     buildSymbolRing(el.ringA, RING_A, RAD.aIn, RAD.aOut);
@@ -1423,16 +1484,21 @@
     el.clearBtn.addEventListener('click', () => { clearSelection(); setStatus('SELECTION CLEARED.', 'muted'); });
     el.resetBtn.addEventListener('click', resetAll);
 
-    el.betInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') spin();
-    });
-    el.betInput.addEventListener('input', () => {
-      if (state.selected.length > 0) validateBet(state.selected.length);
-    });
+    el.betInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') spin(); });
+    el.betInput.addEventListener('input', () => { if (state.selected.length > 0) validateBet(state.selected.length); });
 
-    // If modal is open and user rotates device, layout is already responsive via CSS.
-    // Still, we can re-sync selection highlight safely.
-    window.addEventListener('resize', () => syncSelectionUI(), { passive:true });
+    initAudioUI();
+
+    window.addEventListener('resize', () => {
+      if (!el.modal.classList.contains('hidden')) {
+        requestAnimationFrame(() => {
+          // Refit when viewport changes while modal is open
+          const ok = fitAsciiToBox(el.quarkAscii, 8, 14);
+          if (!ok) el.quarkAscii.textContent = QUARK_ASCII_COMPACT;
+          requestAnimationFrame(() => fitAsciiToBox(el.quarkAscii, 9, 16));
+        });
+      }
+    }, { passive:true });
   }
 
   init();
