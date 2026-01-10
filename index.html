@@ -145,56 +145,6 @@
       box-shadow: inset 0 0 0 1px rgba(210,168,75,0.28);
     }
 
-    /* ========= NEW: clear payout panel (replaces old PAYOUT pill) ========= */
-    .payoutPanel{
-      border-radius: 999px;
-      padding: 8px 12px;
-      background: linear-gradient(180deg, rgba(120,255,160,0.10), rgba(120,255,160,0.04));
-      box-shadow: inset 0 0 0 1px rgba(120,255,160,0.16);
-      font-size: 12px;
-      letter-spacing: 0.06em;
-      color: rgba(183,255,191,0.92);
-      max-width: min(680px, 100%);
-      min-width: 0;
-      user-select:none;
-    }
-    .payoutPanel[open]{ border-radius: 18px; }
-    .payoutSummary{
-      cursor: pointer;
-      font-weight: 900;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: rgba(247,213,126,0.96);
-      outline: none;
-      user-select:none;
-      list-style: none;
-    }
-    .payoutSummary::-webkit-details-marker{ display:none; }
-    .payoutNote{
-      margin-top: 8px;
-      font-size: 12px;
-      line-height: 1.35;
-      color: rgba(183,255,191,0.72);
-      overflow-wrap: break-word;
-    }
-    .payoutTable{
-      width:100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      font-size: 12px;
-    }
-    .payoutTable th, .payoutTable td{
-      padding: 10px 8px;
-      border-bottom: 1px solid rgba(120,255,160,0.10);
-      text-align: left;
-      vertical-align: top;
-    }
-    .payoutTable thead th{
-      color: rgba(183,255,191,0.82);
-      letter-spacing: 0.10em;
-      font-size: 11px;
-    }
-
     .grid{
       display:grid;
       grid-template-columns: 1.25fr 0.75fr;
@@ -470,37 +420,6 @@
       gap: 10px;
     }
 
-    /* ========= NEW: modal stat grid ========= */
-    .statGrid{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .statCard{
-      padding: 12px;
-      border-radius: 14px;
-      background: rgba(0,0,0,0.24);
-      border: 1px solid rgba(120,255,160,0.14);
-      min-width:0;
-    }
-    .statLabel{
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: rgba(183,255,191,0.72);
-    }
-    .statValue{
-      margin-top: 6px;
-      font-size: clamp(18px, 3.2vw, 28px);
-      font-weight: 900;
-      letter-spacing: 0.04em;
-      color: rgba(183,255,191,0.96);
-      word-break: keep-all;
-    }
-    .statValue.win{ color: rgba(123,255,143,0.98); }
-    .statValue.lose{ color: rgba(255,122,122,0.98); }
-
     @media (max-width: 760px){
       .modalBody{ grid-template-columns: 1fr; }
     }
@@ -513,7 +432,6 @@
       .title h1{ letter-spacing: 0.08em; }
       .subtitle{ letter-spacing: 0.05em; }
       .ascii{ max-height: min(42vh, 340px); }
-      .payoutPanel{ width: 100%; }
     }
 
     @media (max-height: 560px){
@@ -540,47 +458,7 @@
           </div>
           <div class="statusrow">
             <div class="pill pillBrass">LATINUM: <strong id="bankrollVal">1000</strong></div>
-
-            <!-- REPLACED: old PAYOUT pill -> clear payout panel -->
-            <details class="payoutPanel" open>
-              <summary class="payoutSummary">PAYOUTS (per selected slot)</summary>
-              <div class="payoutNote">
-                Each selected slot is evaluated independently. Winnings are summed.<br/>
-                <b>Net</b> = Total Winnings − Total Stake.
-              </div>
-
-              <table class="payoutTable" aria-label="Payout table">
-                <thead>
-                  <tr>
-                    <th>Outcome</th>
-                    <th>Meaning</th>
-                    <th>Multiplier</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><b>JACK</b></td>
-                    <td><span class="monoSmall">Q + 🌀 + 🌀</span> (any order)</td>
-                    <td><b>4000×</b></td>
-                  </tr>
-                  <tr>
-                    <td><b>3K</b></td>
-                    <td>Three of a kind (AAA)</td>
-                    <td><b>100×</b></td>
-                  </tr>
-                  <tr>
-                    <td><b>2K</b></td>
-                    <td>Any pair (AAB)</td>
-                    <td><b>5×</b></td>
-                  </tr>
-                  <tr>
-                    <td>—</td>
-                    <td>No match</td>
-                    <td><b>0×</b></td>
-                  </tr>
-                </tbody>
-              </table>
-            </details>
+            <div class="pill">PAYOUT: <strong>Q+🌀+🌀</strong>=4000× • <strong>3K</strong>=100× • <strong>2K</strong>=5×</div>
           </div>
         </div>
 
@@ -1310,45 +1188,45 @@
   }
 
   // ========= Modal content =========
-  // Updated ASCII: more readable Ferengi bartender silhouette + fallback.
+  // ASCII generated from your provided image (transformed into text).
   const QUARK_ASCII_BIG = String.raw`
-                 .-""""""-.
-              .-'  _  _   '-.
-            .'    (o)(o)     '.        ___
-           /   .-..____..-.    \     .'   '.
-          ;   /  .-====-.  \    ;   /  .-.  \
-          |   | (  .--.  ) |    |  |  /   \  |
-          |   |  \ '--' /  |    |  |  \_.-/  |
-          ;    \   '--'   /     ;   \       /
-           \     '.___.'        /     '.___.'
-            '.                 .'
-              '-._       _.-'
-                   '---'
-
-        __        __                        __        __
-     .-'  '-.  .-'  '-.                  .-'  '-.  .-'  '-.
-    /  .--.  \/  .--.  \                /  .--.  \/  .--.  \     (ears)
-   |  /    \    /    \  |              |  /    \    /    \  |
-   | |  (__)|  | (__) | |              | |  (__)|  | (__) | |
-   |  \____/    \____/  |              |  \____/    \____/  |
-    \                  /                \                  /
-     '._            _.'                  '._            _.'
-
-           .------------------------------------------------.
-           |  QUARK'S DABO COUNTER                           |
-           |  "The house always wins... unless you tip."     |
-           '------------------------------------------------'
+&@@@@@&&&&&&S3M&B99BBM:i252ssri;::.                    ,r, .XG&@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+&@@@@@@&&&&@9hh9BBBBHi2SGh2XXXsr;,,                     s5s:  ;39@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@&&&&&&G#&&BBGA3#BGAsXsAX:.:,                  ,.. Ar;:   .sH&@@@@@@@@@@@@@@@@@@@@@@@@
+@&@@@@@&@@&@@&@@&&#XM#BBHAiii;..::.          .. ....:i,..rS, i2:   :5#@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@529B&&G5Ar:. .:;,.    ,.   ...,:;:, :;..: ,h9H;,:  .sG&@@@@@@@@@@@@@@@@@@@
+@@@@&&&&@@@@@@B9BBrHBBBB#M3Assriiri::::,,.     ..    .;;,  .ArMB9252i,  ;3B@@@@@@@@@@@@@@@@@
+B@@@&&&&&@@@@@BMM#rHGhhS#HM52XAAAssi;:,        .   .:i:  .,2@92M9H5&#hs:  ,2#@@@@@@@@@@@@@@@
+&@&&&&&&@@@@@@&#HSXrX2s;rA55AAA2AXi::,:,,,,,.,,:;:....:rXrrsA3hAH2X&@@9MA;   sG&@@@@@@@@@@@@
+&@&&@&&&&@@@@@@&#HX3BB&9Ms::rssXXsrrr::;:,,,,,,,.  i23M3AXSBHr;2hrX&@@@@BHX;   iH&@@@@@@@@@@
+@@@&@&&&&&@@@@@@B3M9H3SSHGGM32Xi;:;;:,,,....::::;AG#Bhi;,rG33HX53s3@@@@@@@BG2i   ;M&@@@@@@@@
+@@@&&@&&&&@@@@@&HMG93#@&SH33H####9BBB#99Ghh5XiASMMh,5Ms. ;s:isr35X#@@@@@@@@@9H5i.  ;M&@@@@@@
+@@@&&@@@@@@@@@@&sr3SA#&G9@@9M522539GHHs3#992i. rrX3M5r;. ,rr:;2XrX&&@@@@@@@@@&#G3i   iH@@@@@
+@@@@&&@@@@@@@@@@A,XHXGhh9@@&hr:,r2HGMhXXir22r,. .:;;,,.  .rrX5r:i#&BBB&@@@@@@@@&#G3i   rG@@@
+&@@@&&@@@@@@@@@@S.:hi35AM9@@#X;,.:rsAXii;rsAr.       .;:;X53Xs:;S@@@&BBB&&@@@@BH&B9G2:   X#@
+&&@@@@@@@@@@@@@@@3,i3Xs..5B@&Mr;,.   ..;sssA:    .,,  iA52s:,;29@@@@&&&&BBBB&@&s3&BB#Ms   .2
+&&@@@@@@@@@@@@@@@&5.;h2, r9&@&S32;;:,,::hAX3Aii;s3As, :X3Ars3#@@@@&&&&BB&@&&&&&GXB&&@BS5,   
+&&@@@@@@@@@@@@@@@@@M,.AM2A5#@@@HG3si;;,:2h3HGSSHXr.;iiA5MSHH&@@@@@&&@@@&&&@@@&&@&@&B&@&9Hi  
+&&@@@@@@@@@@@@@@@@@@9X..AHH9&@&9hGAsri;:.,  .::,,:s2is25h3X.5B@@@@@&@@@@@@@@@@@&B&&B&&@@&SX 
+@@@@@@@@@@@@@@@@@@@@@@Bhsrs2G@&BHG5Arrss2Ari::iis:;srr23MA5A;rh9@@@B9B&@@@@@@@@@@&@&&&B@@&93
+@@@@@@@@@@@@@@@@@@@@BSH3225G9@@&9MHM35Xrs;i;;srii;:,iA5GHrrA3;:shB@B#GGB@@@@@@@@@@@&&@BB&@@B
+@@@@@@@@@@@@@&B#GGh53Mh22H#B@@@B##SSM#5rXsXAXrirsAr;r5GSHHA;H5Ai;2G9#GS&@@@@@@@@@@@@@@@&B&@@
+@@@@@@@@BSHh52s: ;:,iX5552A39&@&##BBGG#2A552Ariii:. i##H55ShXXAMr;2G&BB@@@@@@@@@@@@@@@@@&B&@
+@@@&9#M2;,isrii:;iAA225sA3H##B&@@&&&&#GMsi;:,      :3BM3h3XHhir5555h#SS9#99B9B&@@@@@@@@@@&B&
+@@&hsA52sX2srrririsrs5MS999B&&B@@@@@@&&BGhXii::iiirA59#B9SM553s,:;XAhXA3sXX3sX5H9&@@@@@@@@&B
+@@B33MhH2G5XXXr2A25MG#BB###9#S&@@@@@@@&&@@BGHGS##9M;sB#&@@9G3A25r:s2MA2h222Mh3hHG#@@@@@@@@@&
 `;
 
   const QUARK_ASCII_COMPACT = String.raw`
-   .-""""-.
-  / o  o  \    __  __
- |   --    | .'  ''  '.
- |  \__/   |/  .--.   \   (ears)
-  \  ____ /|  (__) )  |
-   '-.__.-' \  '--'  /
-             '.___.-'
- | QUARK'S BAR: TIP FIRST |
+      .-====-.
+    .'  _  _  '.
+   /   (o)(o)   \
+  |     .--.     |
+  |   .(____).   |
+   \    '=='
+    '._      _.'
+       '-..-'
+  "Latinum talks."
 `;
 
   const QUARK_REMARKS = {
@@ -1401,46 +1279,23 @@
     else el.spinBtn.focus();
   }
 
-  // Clearer modal: big stat grid + meaning.
-  function showResultModal({ stake, won, net, bankroll, slotsCount, betPerSlot, bestTier }) {
-    const tierLabel =
-      bestTier ||
-      (won >= stake * 1000 ? 'JACK' : (won > 0 ? 'WIN' : 'LOSS'));
-
-    const title =
-      (tierLabel === 'JACK') ? "JACKPOT RESULT" :
-      (net > 0) ? "WIN RESULT" : "LOSS RESULT";
-
-    const sub = `Slots: ${slotsCount} • Bet/slot: ${betPerSlot} • Best hit: ${tierLabel}`;
-
-    let remarkKey;
-    if (tierLabel === 'JACK') remarkKey = 'jackpot';
-    else if (net > 0) remarkKey = 'win';
-    else remarkKey = 'loss';
+  function showResultModal({ stake, won, net, bankroll }) {
+    let title, sub, remarkKey;
+    if (won > 0 && net > 0) {
+      title = (won >= stake * 1000) ? "JACKPOT RESULT" : "WIN RESULT";
+      sub = "The wheel has spoken. Quark has opinions.";
+      remarkKey = (won >= stake * 1000) ? "jackpot" : "win";
+    } else {
+      title = "LOSS RESULT";
+      sub = "The wheel has spoken. Quark has… relief.";
+      remarkKey = "loss";
+    }
 
     const summaryHTML = `
-      <div class="statGrid">
-        <div class="statCard">
-          <div class="statLabel">Total Stake</div>
-          <div class="statValue">${stake}</div>
-        </div>
-        <div class="statCard">
-          <div class="statLabel">Total Winnings</div>
-          <div class="statValue">${won}</div>
-        </div>
-        <div class="statCard">
-          <div class="statLabel">Net</div>
-          <div class="statValue ${net > 0 ? 'win' : (net < 0 ? 'lose' : '')}">${net}</div>
-        </div>
-        <div class="statCard">
-          <div class="statLabel">Bankroll</div>
-          <div class="statValue">${bankroll}</div>
-        </div>
-      </div>
-
-      <div class="muted">
-        Each selected slot pays independently. Total winnings are summed; net includes your stake.
-      </div>
+      <div><b>Stake:</b> ${stake}</div>
+      <div><b>Winnings:</b> ${won}</div>
+      <div><b>Net:</b> ${net}</div>
+      <div><b>Bankroll:</b> ${bankroll}</div>
     `;
 
     openModal({
@@ -1564,23 +1419,7 @@
 
     setSpinning(false);
 
-    // NEW: pass more context for the clearer modal.
-    let bestTier = '--';
-    for (const r of rows) {
-      if (r.mult === 4000) { bestTier = 'JACK'; break; }
-      if (r.mult === 100 && bestTier !== 'JACK') bestTier = '3K';
-      if (r.mult === 5 && bestTier === '--') bestTier = '2K';
-    }
-
-    showResultModal({
-      stake,
-      won: totalWin,
-      net,
-      bankroll: state.bankroll,
-      slotsCount: state.selected.length,
-      betPerSlot: bet,
-      bestTier
-    });
+    showResultModal({ stake, won: totalWin, net, bankroll: state.bankroll });
   }
 
   function resetAll() {
