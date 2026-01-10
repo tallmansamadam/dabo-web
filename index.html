@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DABO // Ferengi Wheel // V2.8</title>
+  <title>DABO // Ferengi Wheel</title>
 
   <style>
     :root{
@@ -105,21 +105,6 @@
       font-size: clamp(18px, 2.1vw, 24px);
       white-space: nowrap;
     }
-    .versionTag{
-      display:inline-flex;
-      align-items:center;
-      gap: 8px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      background: rgba(210,168,75,0.10);
-      border: 1px solid rgba(210,168,75,0.26);
-      color: rgba(247,213,126,0.95);
-      user-select:none;
-      white-space: nowrap;
-    }
-
     .subtitle{
       font-size: 12px;
       letter-spacing: 0.09em;
@@ -151,6 +136,7 @@
       user-select:none;
 
       white-space: nowrap; /* desktop */
+
       min-width: 0;
       max-width: 100%;
     }
@@ -211,7 +197,7 @@
       letter-spacing:0.08em;
       color: rgba(183,255,191,0.85);
     }
-    input, select, button{
+    input, button{
       font: inherit;
       padding: 10px 12px;
       border-radius: 12px;
@@ -223,7 +209,6 @@
       min-width: 0;
       max-width: 100%;
     }
-    select{ cursor:pointer; }
     input::placeholder{ color: rgba(183,255,191,0.35); }
     button{
       cursor:pointer;
@@ -395,7 +380,7 @@
       box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
       color: rgba(247,213,126,0.95);
 
-      font-size: var(--asciiSize, clamp(9px, 1.6vw, 14px));
+      font-size: var(--asciiSize, clamp(10px, 1.7vw, 14px));
       line-height: 1.05;
 
       white-space: pre;
@@ -469,13 +454,10 @@
         <div class="topbar">
           <div class="title">
             <h1>DABO</h1>
-            <div class="versionTag">V2.8</div>
             <div class="subtitle">TOP-DOWN WHEEL // FERENGI GAMING TERMINAL</div>
           </div>
           <div class="statusrow">
             <div class="pill pillBrass">LATINUM: <strong id="bankrollVal">1000</strong></div>
-            <div class="pill" id="modePill">MODE: <strong id="modeLabel">NEUTRAL</strong></div>
-            <div class="pill" id="heatPill" style="display:none;">HOUSE EDGE: <strong id="heatLabel">0%</strong></div>
             <div class="pill">PAYOUT: <strong>Q+🌀+🌀</strong>=4000× • <strong>3K</strong>=100× • <strong>2K</strong>=5×</div>
           </div>
         </div>
@@ -536,15 +518,6 @@
           <div class="panel">
             <h2>Controls</h2>
 
-            <label for="modeSelect">GAME MODE</label>
-            <select id="modeSelect">
-              <option value="neutral">Neutral (fair)</option>
-              <option value="house">Quark’s House Edge (adaptive)</option>
-            </select>
-            <div class="muted" id="modeHint" style="margin-top:6px;">
-              House mode is explicitly biased. As you get ahead, the selector increasingly prefers low-paying outcomes (still allows wins).
-            </div>
-
             <label>SELECTED SLOTS</label>
             <div class="chips" id="chips"></div>
             <div id="slotsHint" class="muted"></div>
@@ -562,17 +535,10 @@
             <label style="margin-top:14px;">AUDIO</label>
             <div class="ctaRow" style="align-items:center;">
               <button id="muteBtn" type="button">SFX: ON</button>
-              <button id="bgmBtn" type="button">BGM: ON</button>
               <input id="volSlider" type="range" min="0" max="100" value="70" style="width:min(260px, 100%);" />
             </div>
-
-            <div class="ctaRow" style="margin-top:8px; align-items:center;">
-              <input id="daboFile" type="file" accept="audio/*" />
-              <button id="loadDaboBtn" type="button">Load “DABO!” Sample</button>
-            </div>
-
             <div class="muted" id="audioHint" style="margin-top:6px;">
-              Audio begins after a click (autoplay rules). BGM is an original synth loop (not the DS9 theme).
+              Audio begins after a click (browser autoplay rules).
             </div>
 
             <div class="muted" style="margin-top: 14px;">
@@ -611,7 +577,6 @@
   'use strict';
 
   // ========= Config =========
-  const VERSION = 'V2.8';
   const SLOTS = 36;
   const STEP_DEG = 360 / SLOTS; // 10 deg
   const MIN_BET = 10;
@@ -668,8 +633,6 @@
     return minInclusive + Math.floor(Math.random() * range);
   }
 
-  function clamp01(x){ return Math.max(0, Math.min(1, x)); }
-
   function prefersReducedMotion() {
     return globalThis.matchMedia && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
@@ -699,17 +662,8 @@
 
     // Audio UI
     muteBtn: document.getElementById('muteBtn'),
-    bgmBtn: document.getElementById('bgmBtn'),
     volSlider: document.getElementById('volSlider'),
     audioHint: document.getElementById('audioHint'),
-    daboFile: document.getElementById('daboFile'),
-    loadDaboBtn: document.getElementById('loadDaboBtn'),
-
-    // Mode UI
-    modeSelect: document.getElementById('modeSelect'),
-    modeLabel: document.getElementById('modeLabel'),
-    heatPill: document.getElementById('heatPill'),
-    heatLabel: document.getElementById('heatLabel'),
 
     // Modal
     modal: document.getElementById('resultModal'),
@@ -725,34 +679,23 @@
   // ========= State =========
   const state = {
     bankroll: 1000,
-    startBankroll: 1000,
-    cumulativeNet: 0,
-
     selected: [],
     spinning: false,
     rotA: 0, rotB: 0, rotC: 0,
-
-    // Mode / adaptive pressure (0..1)
-    mode: 'neutral', // 'neutral' | 'house'
-    heat: 0.0,
-
     lastFocusEl: null,
   };
 
-  // ========= Status helpers =========
   function setStatus(msg, kind='muted') {
     el.statusLine.className = `monoSmall ${kind}`;
     el.statusLine.textContent = msg;
   }
   function updateBankroll() { el.bankrollVal.textContent = String(state.bankroll); }
-
   function setSpinning(on) {
     state.spinning = on;
     el.spinBtn.disabled = on;
     el.clearBtn.disabled = on;
     el.resetBtn.disabled = on;
     el.betInput.disabled = on;
-    el.modeSelect.disabled = on;
   }
 
   // ========= Bet validation =========
@@ -832,6 +775,7 @@
     const a = ((angleDeg % 360) + 360) % 360;
     return (a > 90 && a < 270) ? 180 : 0;
   }
+
   function clearGroup(g) { while (g.firstChild) g.removeChild(g.firstChild); }
 
   function buildSlotRing() {
@@ -1061,43 +1005,29 @@
     constructor() {
       this.ctx = null;
       this.master = null;
-
-      this.sfxEnabled = true;
-      this.bgmEnabled = true;
+      this.enabled = true;
       this.volume = 0.70;
 
-      // Spin noise
       this.spinSrc = null;
       this.spinGain = null;
       this.spinFilter = null;
       this.lfo = null;
       this.lfoGain = null;
-
-      // BGM synth loop
-      this.bgmGain = null;
-      this._bgmTimer = null;
-      this._bgmNextTime = 0;
-      this._bgmStep = 0;
-
-      // Optional DABO sample buffer (user-uploaded)
-      this.daboBuffer = null;
     }
 
     loadPrefs() {
-      const sfx = localStorage.getItem('dabo_sfx_enabled');
-      const bgm = localStorage.getItem('dabo_bgm_enabled');
+      const enabled = localStorage.getItem('dabo_audio_enabled');
       const vol = localStorage.getItem('dabo_audio_volume');
-      if (sfx !== null) this.sfxEnabled = sfx === '1';
-      if (bgm !== null) this.bgmEnabled = bgm === '1';
+      if (enabled !== null) this.enabled = enabled === '1';
       if (vol !== null) this.volume = Math.max(0, Math.min(1, Number(vol)));
     }
     savePrefs() {
-      localStorage.setItem('dabo_sfx_enabled', this.sfxEnabled ? '1' : '0');
-      localStorage.setItem('dabo_bgm_enabled', this.bgmEnabled ? '1' : '0');
+      localStorage.setItem('dabo_audio_enabled', this.enabled ? '1' : '0');
       localStorage.setItem('dabo_audio_volume', String(this.volume));
     }
 
     async ensureReady() {
+      if (!this.enabled) return;
       if (!this.ctx) {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         this.master = this.ctx.createGain();
@@ -1107,25 +1037,17 @@
       if (this.ctx.state !== 'running') await this.ctx.resume();
     }
 
+    setEnabled(on) {
+      this.enabled = !!on;
+      if (!this.enabled) this.stopSpin(true);
+      this.savePrefs();
+    }
     setVolume(v01) {
       this.volume = Math.max(0, Math.min(1, v01));
       if (this.master) this.master.gain.value = this.volume;
       this.savePrefs();
     }
 
-    setSfxEnabled(on) {
-      this.sfxEnabled = !!on;
-      if (!this.sfxEnabled) this.stopSpin(true);
-      this.savePrefs();
-    }
-    setBgmEnabled(on) {
-      this.bgmEnabled = !!on;
-      if (!this.bgmEnabled) this.stopBGM(true);
-      else this.startBGM();
-      this.savePrefs();
-    }
-
-    // ---------- helpers ----------
     _noiseBuffer(seconds = 1.0) {
       const sr = this.ctx.sampleRate;
       const len = Math.floor(sr * seconds);
@@ -1135,132 +1057,8 @@
       return buf;
     }
 
-    _beep(freq, dur, type='sine', gain=0.18, when=0, outGain=null) {
-      if (!this.ctx) return;
-      const dest = outGain ?? this.master;
-      const t0 = this.ctx.currentTime + when;
-
-      const o = this.ctx.createOscillator();
-      o.type = type;
-      o.frequency.setValueAtTime(freq, t0);
-
-      const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0.0, t0);
-      g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-
-      o.connect(g);
-      g.connect(dest);
-      o.start(t0);
-      o.stop(t0 + dur + 0.02);
-    }
-
-    _mtof(m){ return 440 * Math.pow(2, (m - 69) / 12); }
-
-    // ---------- BGM (original loop; not DS9 theme) ----------
-    startBGM() {
-      if (!this.ctx || !this.bgmEnabled) return;
-
-      if (!this.bgmGain) {
-        this.bgmGain = this.ctx.createGain();
-        this.bgmGain.gain.value = 0.0;
-        this.bgmGain.connect(this.master);
-      }
-
-      // If already running, don't double-start
-      if (this._bgmTimer) return;
-
-      // Fade in
-      const t = this.ctx.currentTime;
-      this.bgmGain.gain.cancelScheduledValues(t);
-      this.bgmGain.gain.setValueAtTime(this.bgmGain.gain.value, t);
-      this.bgmGain.gain.linearRampToValueAtTime(0.22, t + 0.35);
-
-      // Simple space-station fanfare loop (original)
-      const tempo = 92;                 // bpm
-      const stepDur = 60 / tempo / 2;   // 8th notes
-
-      const prog = [
-        { root: 50, mode: 'min' }, // D3-ish
-        { root: 48, mode: 'min' }, // C3-ish
-        { root: 55, mode: 'min' }, // G3-ish
-        { root: 45, mode: 'min' }, // A2-ish
-      ];
-
-      // melody steps as intervals (relative) for a sci-fi contour
-      const melody = [0, 3, 5, 7, 5, 3, 0, -2, 0, 5, 7, 10, 7, 5, 3, 0];
-
-      this._bgmNextTime = this.ctx.currentTime + 0.05;
-      this._bgmStep = 0;
-
-      this._bgmTimer = setInterval(() => {
-        if (!this.ctx || !this.bgmEnabled || !this._bgmTimer) return;
-
-        const lookAhead = 0.30;
-        while (this._bgmNextTime < this.ctx.currentTime + lookAhead) {
-          const bar = Math.floor(this._bgmStep / 16);
-          const stepInBar = this._bgmStep % 16;
-          const chord = prog[bar % prog.length];
-          const root = chord.root;
-
-          // Bass: quarter notes
-          if (stepInBar % 4 === 0) {
-            this._beep(this._mtof(root - 12), 0.18, 'sine', 0.14, this._bgmNextTime - this.ctx.currentTime, this.bgmGain);
-          }
-
-          // Pad-ish chord: every half-bar
-          if (stepInBar % 8 === 0) {
-            const third = root + 3;
-            const fifth = root + 7;
-            this._beep(this._mtof(root),  0.34, 'triangle', 0.06, this._bgmNextTime - this.ctx.currentTime, this.bgmGain);
-            this._beep(this._mtof(third), 0.34, 'triangle', 0.05, this._bgmNextTime - this.ctx.currentTime, this.bgmGain);
-            this._beep(this._mtof(fifth), 0.34, 'triangle', 0.05, this._bgmNextTime - this.ctx.currentTime, this.bgmGain);
-          }
-
-          // Melody: every step
-          const melNote = root + 12 + melody[stepInBar];
-          this._beep(this._mtof(melNote), 0.12, 'square', 0.05, this._bgmNextTime - this.ctx.currentTime, this.bgmGain);
-
-          this._bgmNextTime += stepDur;
-          this._bgmStep++;
-        }
-      }, 80);
-    }
-
-    pauseBGM(immediate=false) {
-      if (!this.ctx || !this.bgmGain) return;
-      const t = this.ctx.currentTime;
-      this.bgmGain.gain.cancelScheduledValues(t);
-      this.bgmGain.gain.setValueAtTime(this.bgmGain.gain.value, t);
-      this.bgmGain.gain.linearRampToValueAtTime(0.0, t + (immediate ? 0.05 : 0.20));
-      // Stop scheduling to save CPU
-      if (this._bgmTimer) {
-        clearInterval(this._bgmTimer);
-        this._bgmTimer = null;
-      }
-    }
-
-    resumeBGM() {
-      if (!this.ctx || !this.bgmEnabled) return;
-      // restart scheduler + fade in
-      this.startBGM();
-    }
-
-    stopBGM(immediate=false) {
-      if (this._bgmTimer) {
-        clearInterval(this._bgmTimer);
-        this._bgmTimer = null;
-      }
-      if (!this.ctx || !this.bgmGain) return;
-      const t = this.ctx.currentTime;
-      this.bgmGain.gain.cancelScheduledValues(t);
-      this.bgmGain.gain.setValueAtTime(this.bgmGain.gain.value, t);
-      this.bgmGain.gain.linearRampToValueAtTime(0.0, t + (immediate ? 0.03 : 0.25));
-    }
-
-    // ---------- Spin SFX ----------
     startSpin() {
-      if (!this.sfxEnabled || !this.ctx) return;
+      if (!this.enabled || !this.ctx) return;
       this.stopSpin(true);
 
       const src = this.ctx.createBufferSource();
@@ -1320,38 +1118,41 @@
       this.lfoGain = null;
     }
 
+    _beep(freq, dur, type='sine', gain=0.18, when=0) {
+      if (!this.enabled || !this.ctx) return;
+      const t0 = this.ctx.currentTime + when;
+
+      const o = this.ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0, t0);
+      g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+      o.connect(g);
+      g.connect(this.master);
+      o.start(t0);
+      o.stop(t0 + dur + 0.02);
+    }
+
     playWin() {
-      if (!this.sfxEnabled || !this.ctx) return;
+      if (!this.enabled || !this.ctx) return;
       this._beep(660, 0.16, 'triangle', 0.16, 0.00);
       this._beep(880, 0.16, 'triangle', 0.16, 0.12);
       this._beep(1320,0.18, 'triangle', 0.16, 0.24);
     }
 
     playLose() {
-      if (!this.sfxEnabled || !this.ctx) return;
+      if (!this.enabled || !this.ctx) return;
       this._beep(110, 0.20, 'sine', 0.22, 0.00);
       this._beep(80,  0.24, 'sine', 0.18, 0.05);
     }
 
-    // Optional “DABO!” sample buffer
-    playDaboSample() {
-      if (!this.sfxEnabled || !this.ctx || !this.daboBuffer) return 0;
-      const src = this.ctx.createBufferSource();
-      src.buffer = this.daboBuffer;
-
-      const g = this.ctx.createGain();
-      g.gain.value = 0.85;
-
-      src.connect(g);
-      g.connect(this.master);
-      src.start();
-
-      return this.daboBuffer.duration || 0.8;
-    }
-
-    // Generic TTS “DABO!” (no impersonation)
-    sayDaboTTS() {
-      if (!this.sfxEnabled) return;
+    // Generic win callout: system voice, not an impersonation.
+    sayDabo() {
+      if (!this.enabled) return;
       if (!('speechSynthesis' in window)) return;
 
       const u = new SpeechSynthesisUtterance('DABO!');
@@ -1387,30 +1188,50 @@
   }
 
   // ========= Modal content =========
-  // Head-only Ferengi ASCII, styled to match your screenshot vibe (dense glyph shading).
-  const FERENGI_HEAD_ASCII = String.raw`
-     ##+=--==++**###%%%%%@@@@@@@@@@@@@@@@@@@@%%%%###**++==--=+##
-   ##+=--==++**###%%%%%@@@@@@@@@@@@@@@@@@@@@@@@%%%%###**++==--=+##
-  #+=--==++**###%%%%%@@@@@@@@@@@@@@@%%@@@@@@@@@@@@%%%%###**++==--=+#
- #=--==++**###%%%%%@@@@@@@@@@@%%%%###***###%%%%@@@@@@@@@@%%%%###**++==-#
-+=-==++**###%%%%%@@@@@@@@@%%%##**++===---===++**##%%%@@@@@@@@@%%%%###**++==-+
-=-==++**###%%%%@@@@@@@@%%%##**++==--:::::::--==++**##%%%@@@@@@@@%%%%###**++==-
-==++**###%%%%@@@@@@@%%%##**++==--:::..   ..:::--==++**##%%%@@@@@@@%%%%###**++==
-=++**###%%%%@@@@@@%%%##**++==--::..  .::::.  ..::--==++**##%%%@@@@@@%%%%###**++=
-++**###%%%%@@@@@%%%##**++==--::.. .:-=++++=-:. ..::--==++**##%%%@@@@@%%%%###**++
-+**###%%%%@@@@%%%##**++==--::.. .-=+*######*+=-. ..::--==++**##%%%@@@@%%%%###**+
-**###%%%%@@@@%%%##**++==--::.. .=+*##%%%%%%##*+=. ..::--==++**##%%%@@@@%%%%###**
-**###%%%%@@@@%%%##**++==--::.. .=*##%%%%%%%%##*=. ..::--==++**##%%%@@@@%%%%###**
-+**###%%%%@@@@%%%##**++==--::.. .-=+*##%%%%##*+=-. ..::--==++**##%%%@@@@%%%%###**
-++**###%%%%@@@@@%%%##**++==--::.. .:-=++++=-:. ..::--==++**##%%%@@@@@%%%%###**++
-=++**###%%%%@@@@@@%%%##**++==--::..  .::::.  ..::--==++**##%%%@@@@@@%%%%###**++=
-==++**###%%%%@@@@@@@%%%##**++==--:::..   ..:::--==++**##%%%@@@@@@@%%%%###**++==
-=-==++**###%%%%@@@@@@@@%%%##**++==--:::::::--==++**##%%%@@@@@@@@%%%%###**++==-
-+=-==++**###%%%%%@@@@@@@@@%%%##**++===---===++**##%%%@@@@@@@@@%%%%###**++==-+
- #=--==++**###%%%%%@@@@@@@@@@@%%%%###***###%%%%@@@@@@@@@@%%%%###**++==-#
-  #+=--==++**###%%%%%@@@@@@@@@@@@@@@%%@@@@@@@@@@@@%%%%###**++==--=+#
-   ##+=--==++**###%%%%%@@@@@@@@@@@@@@@@@@@@@@@@%%%%###**++==--=+##
-     ##+=--==++**###%%%%%@@@@@@@@@@@@@@@@@@@@%%%%###**++==--=+##
+  // Head-only ASCII portrait (tuned to be face-forward and recognizable; no body/desk/banner).
+  const QUARK_ASCII_BIG = String.raw`
+           #%#*+===+******###%#%%@@@@@@@@@@@@@@@@@%%@@%%@@@@@@@@@@%##%@@@%*-                                  
+         :#%*=:---=++++***#*####%%@@@@@@%@@@@@@@@@%%%%%%@@@@@@@@%%@%==*%%@@@#+:                               
+        :#*=    :===+++++***#%%#%%@@@@@@%@%@@%%%@@@%%@@%@@@@@@@@%%%%#=-=+#%@@@%#=                             
+        *+-    :-++++++==+*#%###%%@@@@@@%%%@@%%%@@@@@@@@@@@@@@@%%%%%%#+*++*#%%@@@%*-                          
+       +=-:    -+**++*++=*#%%##%%%@@@@@@%%@@@@@@@@@@@@@@@%%@@@@%*%%#@%==#%%##@@@@@@@#+                        
+      *+:      -++******#%%####%%@@@@@@@@%%@@@%%%%%%%%%%%%%%%%#**%%%%%#  +@@@%##%@%@@@%*-                     
+     +*-       -=+*####%@@%#####%@@@@@@@@%%%%%%%%%%%%%%%%#####*####%#%@= #@%*:  +%%#%@@@@#+                   
+     #=        -==+**#%%%%%####%%%%%%%@@%%#%%%@@%%%%%%#%#####%%%%##*%@%#%@%#=:   =%%##%%@@@%*-                
+    +*:         --==****#%%##*###%%#%%%%%%#%%@@@@@@@%%###%%%%%@@%####%%%@@%%%#-   -**=*#%%@@@@#=              
+    #+          :--=+*+++********########%%%%%%@@@@@%%%%@@@@@@%%#*#**%@@%%#:-*+     += -+*##%@@@%*-           
+--  #=          ::-==++++==+++*+++**##%%%%@%%%%%@%%@%%%%@@@@@%%***#%%@@%#%-   ==:   :+   -=+*#%@@@@#-         
+:-  #+:-+*#*+-  :::-==+*++++++***##%%%%%%%%%%%%%@@%%%%%%%%%%#***#%@@@%###+    :*+:  -*-     =+*#%%@@@#+       
+ :: +#*#*+*#%%#*=--==++++++=+++*####%##%%%####%%%###%###*##%#%%@@%%*+=*#+##+=- -*::==*-       -++#%%@@@%*:    
+  : -#+-     -*%%#*+=======-=+++#***########%%%%%%%##**##%@@@%*+===---=++*#%%#*=--==++++++=+++*####%##%%%#### 
+  : -#+-     -*%%#*+=======-=+++#***########%%%%%%%##**##%@@@%*+===---=++*#%%#*=--==++++++=+++*####%##%%%#### 
+`;
+
+  // Compact head-only fallback for very small viewports
+  const QUARK_ASCII_COMPACT = String.raw`
+       ##+==++***###%%@@@@@@@@@@%%%%%@@@@@@%*#%@%+:                     
+      #+: :-=+++***##%%@@@%%@%%@@%%%%@@@@@%%#==*%@%*-                   
+     +=   -++++=+*%##%%@@@%%@%%@@@@@@@@@@%%%%#+**#%@@%+:                
+    +-    =*****##%#%%@@@@%%@@%%%%%%%%%%%##%%%--%%%#%@@%#=              
+   ==     -+*##%@%###%%@@@%%%%%%%%%%%########%#=%%- -#%%@@%+            
+   *:     :-=*##%#####%%%%%#%%@@%%%####%%@###%%@@#*: :***%%@%*-         
+  -+       :=+++++**+*#####%%%%@@@%%%@@@@#**#%@%#:==   =:-+*%@@#=       
+- -+:-==-  :-==++=+++*###%%%%%%%%%%%%%%%#*#%@%##=  -=  =-  :=*#@@%+     
+ : **+=+##*===+=+==+*#########%%%%####%%%%%*++*+*++-+:-+=     -+#@@%*:  
+  -+:     +###*++++++*+*###########%%@%#+--:=+=  :+#+-=#-       -*#%@@#-
+  =  :-  :  :=++*######%%%%%%%%%#%%%#+:  :+###= -- +=-=*          -+#@@@
+ :   -    -==:         ::::=++==*+-:- :#= =#%%*+#*=*--=+            -+#%
+-+= :=       :-----:     -    -*#%*=*+==-+*#%%***##*=+*-              -+
+:#*-:=  -     =+**+=: +-+#++=--+#%%%*+==*##%%@%+**+=***                 
+ ##+-*-=-     -*#%#*=-::-+*#*+++#%%%%%%%%%%%@%*++==*##                  
+ -%#-*==**:    +##%%######**+++*%%@%%%%%%%#+*==-=**#*                 + 
+  =##-+*%%#:   :+*#%%@%%%##+**+*%%%%%%##%%%+=-+*%#*=                  +*
+   +%#--*%#-     --***#####:=+-=+***=:++#%#*=-*+=-                     +
+    -%%*:-+=-    :::+*#*###=---    :*#%#*#+=-: ::                       
+      *%%*:       - =+**###%%%@%%##%##+=**+=---*%=                      
+        =***+-     ::++****=+***%##**#*+**+=--==*#+-                    
+        :===-:     : --==+++**#**+*++##%#+=- -#+-=##+-                  
+    :---=+=-        : :::+**##**%%%##**#*=-   =## +*##=:                
 `;
 
   const QUARK_REMARKS = {
@@ -1441,10 +1262,17 @@
     el.modalSummary.innerHTML = summaryHTML;
     el.modalRemark.textContent = remark;
 
-    el.quarkAscii.textContent = FERENGI_HEAD_ASCII;
+    el.quarkAscii.textContent = QUARK_ASCII_BIG;
     el.modal.classList.remove('hidden');
 
-    requestAnimationFrame(() => fitAsciiToBox(el.quarkAscii, 7, 14));
+    requestAnimationFrame(() => {
+      const ok = fitAsciiToBox(el.quarkAscii, 7, 14);
+      if (!ok) {
+        el.quarkAscii.textContent = QUARK_ASCII_COMPACT;
+        requestAnimationFrame(() => fitAsciiToBox(el.quarkAscii, 8, 15));
+      }
+    });
+
     setTimeout(() => el.modalOk.focus(), 0);
   }
 
@@ -1489,121 +1317,6 @@
     if (!el.modal.classList.contains('hidden') && e.key === 'Escape') closeModal();
   });
 
-  // ========= Mode / house-edge UI =========
-  const LS_MODE = 'dabo_mode_v28';
-  const LS_HEAT = 'dabo_heat_v28';
-
-  function loadMode() {
-    const m = localStorage.getItem(LS_MODE);
-    if (m === 'house' || m === 'neutral') state.mode = m;
-    const h = localStorage.getItem(LS_HEAT);
-    if (h !== null) state.heat = clamp01(Number(h));
-    el.modeSelect.value = state.mode;
-    syncModeUI();
-  }
-
-  function saveMode() {
-    localStorage.setItem(LS_MODE, state.mode);
-    localStorage.setItem(LS_HEAT, String(state.heat));
-  }
-
-  function syncModeUI() {
-    el.modeLabel.textContent = state.mode.toUpperCase();
-    el.heatPill.style.display = (state.mode === 'house') ? '' : 'none';
-    el.heatLabel.textContent = `${Math.round(state.heat * 100)}%`;
-  }
-
-  // Update "pressure" based on how far ahead the player is (and recent outcomes)
-  function updateHeatAfterSpin(net) {
-    if (state.mode !== 'house') {
-      state.heat = 0;
-      syncModeUI();
-      saveMode();
-      return;
-    }
-
-    // Base heat from profit ratio
-    const profit = state.bankroll - state.startBankroll;
-    const profitRatio = profit / Math.max(1, state.startBankroll); // can be negative
-    const base = clamp01(profitRatio / 0.50); // +50% bankroll => heat ~ 1.0
-
-    // Smooth toward base, then nudge from recent net
-    state.heat = clamp01(state.heat * 0.70 + base * 0.30);
-
-    if (net > 0) {
-      // “Hustle” ramps after wins
-      const spike = clamp01(net / 1500) * 0.18; // big wins spike more
-      state.heat = clamp01(state.heat + 0.06 + spike);
-    } else {
-      // Ease off during losses so the game stays playable
-      state.heat = clamp01(state.heat - 0.10);
-    }
-
-    syncModeUI();
-    saveMode();
-  }
-
-  // ========= House outcome selection (explicitly biased) =========
-  function estimateTotalWinForOffsets(offsets, bet) {
-    let total = 0;
-    for (const slot of state.selected) {
-      const [sa, sb, sc] = symbolsAtSlot(slot, offsets);
-      total += bet * payoutMultiplier([sa, sb, sc]);
-    }
-    return total;
-  }
-
-  // Returns offsets {a,b,c} depending on mode.
-  function chooseOffsets(bet) {
-    if (state.mode !== 'house' || state.selected.length === 0) {
-      return { a: randInt(0, SLOTS), b: randInt(0, SLOTS), c: randInt(0, SLOTS) };
-    }
-
-    // Generate candidates, then weighted-pick based on heat.
-    const N = 160;
-    const candidates = [];
-    for (let i = 0; i < N; i++) {
-      const off = { a: randInt(0, SLOTS), b: randInt(0, SLOTS), c: randInt(0, SLOTS) };
-      const w = estimateTotalWinForOffsets(off, bet);
-      candidates.push({ off, w });
-    }
-
-    const stake = bet * state.selected.length;
-    const profit = state.bankroll - state.startBankroll;
-
-    // “Reel-in” behavior: if player is down, allow more small wins occasionally.
-    const downBad = state.bankroll < state.startBankroll * 0.85;
-    let teaserChance = downBad ? 0.18 : 0.09;
-    teaserChance *= (1 - state.heat * 0.60);
-
-    if (Math.random() < teaserChance) {
-      // Pick a modest win if available (2K-ish) rather than a jackpot.
-      const modest = candidates
-        .filter(c => c.w > 0 && c.w <= bet * 20) // modest payout band
-        .sort((a,b)=>a.w-b.w);
-      if (modest.length) return modest[randInt(0, Math.min(modest.length, 10))].off;
-    }
-
-    // Weighted selection: higher heat => stronger preference for low payouts
-    // normalize total win against a 100x baseline
-    const exp = 1 + 6 * state.heat; // 1..7
-    let totalWeight = 0;
-    for (const c of candidates) {
-      const normalized = c.w / Math.max(1, bet * 100); // jackpot -> ~40
-      // weight in (0,1]; bigger win => smaller weight (more so when exp higher)
-      const weight = 1 / (1 + Math.pow(normalized, exp));
-      c.weight = Math.max(0.0005, weight); // never zero (wins still possible)
-      totalWeight += c.weight;
-    }
-
-    let r = Math.random() * totalWeight;
-    for (const c of candidates) {
-      r -= c.weight;
-      if (r <= 0) return c.off;
-    }
-    return candidates[candidates.length - 1].off;
-  }
-
   // ========= Spin =========
   async function spin() {
     if (state.spinning) return;
@@ -1629,15 +1342,15 @@
     el.spinMeta.textContent = '';
     el.resultsTable.style.display = 'none';
 
-    // Ensure audio context is ready after user gesture
     await audio.ensureReady();
-
-    // BGM pauses for spin SFX
-    audio.pauseBGM(false);
     audio.startSpin();
 
-    // Choose offsets based on mode
-    const final = chooseOffsets(bet);
+    const final = {
+      a: randInt(0, SLOTS),
+      b: randInt(0, SLOTS),
+      c: randInt(0, SLOTS),
+    };
+
     const targetPhaseA = -final.a * STEP_DEG;
     const targetPhaseB = -final.b * STEP_DEG;
     const targetPhaseC = -final.c * STEP_DEG;
@@ -1690,30 +1403,18 @@
     updateBankroll();
 
     const net = totalWin - stake;
-    state.cumulativeNet += net;
 
     el.spinMeta.textContent =
-      `Mode=${state.mode.toUpperCase()} • Heat=${Math.round(state.heat*100)}% • Offsets: A=${final.a}, B=${final.b}, C=${final.c} — Staked ${stake}, Won ${totalWin}, Net ${net}`;
+      `Offsets: A=${final.a}, B=${final.b}, C=${final.c} — Staked ${stake}, Won ${totalWin}, Net ${net}`;
     renderResults(rows);
 
-    // Update house pressure AFTER seeing result
-    updateHeatAfterSpin(net);
-
-    // SFX outcome sting + optional DABO sample, then resume BGM
     if (net > 0) {
       setStatus('DABO! // PROFIT ACHIEVED', 'ok');
       audio.playWin();
-
-      // Placeholder: if user loaded a sample, use it; otherwise use generic TTS
-      const d = audio.playDaboSample();
-      if (d <= 0) audio.sayDaboTTS();
-
-      // resume after sting + sample window
-      setTimeout(() => audio.resumeBGM(), 900);
+      audio.sayDabo();
     } else {
       setStatus('NO HIT // REASSESS YOUR STRATEGY', 'muted');
       audio.playLose();
-      setTimeout(() => audio.resumeBGM(), 650);
     }
 
     if (state.bankroll < MIN_BET) {
@@ -1722,6 +1423,7 @@
     }
 
     setSpinning(false);
+
     showResultModal({ stake, won: totalWin, net, bankroll: state.bankroll });
   }
 
@@ -1729,8 +1431,6 @@
     cancelAnimationFrame(rafId);
 
     state.bankroll = 1000;
-    state.startBankroll = 1000;
-    state.cumulativeNet = 0;
     updateBankroll();
 
     state.rotA = 0; state.rotB = 0; state.rotC = 0;
@@ -1746,73 +1446,28 @@
     el.spinMeta.textContent = '';
     el.resultsTable.style.display = 'none';
 
-    // reset heat (only if you want; keep if you want "memory")
-    state.heat = 0;
-    syncModeUI();
-    saveMode();
-
     el.spinBtn.disabled = false;
     setStatus('SELECT SLOTS, ENTER BET, THEN SPIN.', 'muted');
   }
 
   // ========= Audio UI =========
-  async function initAudioUI() {
+  function initAudioUI() {
     el.volSlider.value = String(Math.round(audio.volume * 100));
-    el.muteBtn.textContent = audio.sfxEnabled ? 'SFX: ON' : 'SFX: OFF';
-    el.bgmBtn.textContent = audio.bgmEnabled ? 'BGM: ON' : 'BGM: OFF';
-
-    // First user gesture starts AudioContext + BGM if enabled
-    const startAudioOnGesture = async () => {
-      window.removeEventListener('pointerdown', startAudioOnGesture);
-      window.removeEventListener('keydown', startAudioOnGesture);
-      try {
-        await audio.ensureReady();
-        if (audio.bgmEnabled) audio.startBGM();
-        el.audioHint.textContent = 'Audio ready.';
-      } catch {
-        el.audioHint.textContent = 'Audio blocked by browser policy.';
-      }
-    };
-    window.addEventListener('pointerdown', startAudioOnGesture, { once:true, passive:true });
-    window.addEventListener('keydown', startAudioOnGesture, { once:true });
+    el.muteBtn.textContent = audio.enabled ? 'SFX: ON' : 'SFX: OFF';
 
     el.muteBtn.addEventListener('click', async () => {
-      audio.setSfxEnabled(!audio.sfxEnabled);
-      el.muteBtn.textContent = audio.sfxEnabled ? 'SFX: ON' : 'SFX: OFF';
-      if (audio.sfxEnabled) {
+      audio.setEnabled(!audio.enabled);
+      el.muteBtn.textContent = audio.enabled ? 'SFX: ON' : 'SFX: OFF';
+      if (audio.enabled) {
         await audio.ensureReady();
-        el.audioHint.textContent = 'SFX enabled.';
+        el.audioHint.textContent = 'Audio ready.';
       } else {
-        el.audioHint.textContent = 'SFX muted.';
+        el.audioHint.textContent = 'Audio muted.';
       }
-    });
-
-    el.bgmBtn.addEventListener('click', async () => {
-      await audio.ensureReady();
-      audio.setBgmEnabled(!audio.bgmEnabled);
-      el.bgmBtn.textContent = audio.bgmEnabled ? 'BGM: ON' : 'BGM: OFF';
-      el.audioHint.textContent = audio.bgmEnabled ? 'BGM enabled.' : 'BGM disabled.';
     });
 
     el.volSlider.addEventListener('input', () => {
       audio.setVolume(Number(el.volSlider.value) / 100);
-    });
-
-    el.loadDaboBtn.addEventListener('click', async () => {
-      const file = el.daboFile.files && el.daboFile.files[0];
-      if (!file) {
-        el.audioHint.textContent = 'Choose an audio file first (mp3/wav/m4a).';
-        return;
-      }
-      try {
-        await audio.ensureReady();
-        const buf = await file.arrayBuffer();
-        const decoded = await audio.ctx.decodeAudioData(buf.slice(0));
-        audio.daboBuffer = decoded;
-        el.audioHint.textContent = `Loaded “DABO!” sample (${Math.round(decoded.duration*10)/10}s).`;
-      } catch {
-        el.audioHint.textContent = 'Could not decode that file. Try a WAV or M4A.';
-      }
     });
 
     if ('speechSynthesis' in window) {
@@ -1835,15 +1490,6 @@
     clearSelection();
     setStatus('SELECT SLOTS, ENTER BET, THEN SPIN.', 'muted');
 
-    loadMode();
-    el.modeSelect.addEventListener('change', () => {
-      state.mode = el.modeSelect.value === 'house' ? 'house' : 'neutral';
-      if (state.mode === 'neutral') state.heat = 0;
-      syncModeUI();
-      saveMode();
-      setStatus(`MODE SET // ${state.mode.toUpperCase()}`, 'muted');
-    });
-
     el.spinBtn.addEventListener('click', spin);
     el.clearBtn.addEventListener('click', () => { clearSelection(); setStatus('SELECTION CLEARED.', 'muted'); });
     el.resetBtn.addEventListener('click', resetAll);
@@ -1855,7 +1501,11 @@
 
     window.addEventListener('resize', () => {
       if (!el.modal.classList.contains('hidden')) {
-        requestAnimationFrame(() => fitAsciiToBox(el.quarkAscii, 7, 14));
+        requestAnimationFrame(() => {
+          const ok = fitAsciiToBox(el.quarkAscii, 7, 14);
+          if (!ok) el.quarkAscii.textContent = QUARK_ASCII_COMPACT;
+          requestAnimationFrame(() => fitAsciiToBox(el.quarkAscii, 8, 15));
+        });
       }
     }, { passive:true });
   }
