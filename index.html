@@ -145,6 +145,56 @@
       box-shadow: inset 0 0 0 1px rgba(210,168,75,0.28);
     }
 
+    /* ========= NEW: clear payout panel (replaces old PAYOUT pill) ========= */
+    .payoutPanel{
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: linear-gradient(180deg, rgba(120,255,160,0.10), rgba(120,255,160,0.04));
+      box-shadow: inset 0 0 0 1px rgba(120,255,160,0.16);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      color: rgba(183,255,191,0.92);
+      max-width: min(680px, 100%);
+      min-width: 0;
+      user-select:none;
+    }
+    .payoutPanel[open]{ border-radius: 18px; }
+    .payoutSummary{
+      cursor: pointer;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(247,213,126,0.96);
+      outline: none;
+      user-select:none;
+      list-style: none;
+    }
+    .payoutSummary::-webkit-details-marker{ display:none; }
+    .payoutNote{
+      margin-top: 8px;
+      font-size: 12px;
+      line-height: 1.35;
+      color: rgba(183,255,191,0.72);
+      overflow-wrap: break-word;
+    }
+    .payoutTable{
+      width:100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+    .payoutTable th, .payoutTable td{
+      padding: 10px 8px;
+      border-bottom: 1px solid rgba(120,255,160,0.10);
+      text-align: left;
+      vertical-align: top;
+    }
+    .payoutTable thead th{
+      color: rgba(183,255,191,0.82);
+      letter-spacing: 0.10em;
+      font-size: 11px;
+    }
+
     .grid{
       display:grid;
       grid-template-columns: 1.25fr 0.75fr;
@@ -420,6 +470,37 @@
       gap: 10px;
     }
 
+    /* ========= NEW: modal stat grid ========= */
+    .statGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .statCard{
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(0,0,0,0.24);
+      border: 1px solid rgba(120,255,160,0.14);
+      min-width:0;
+    }
+    .statLabel{
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(183,255,191,0.72);
+    }
+    .statValue{
+      margin-top: 6px;
+      font-size: clamp(18px, 3.2vw, 28px);
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      color: rgba(183,255,191,0.96);
+      word-break: keep-all;
+    }
+    .statValue.win{ color: rgba(123,255,143,0.98); }
+    .statValue.lose{ color: rgba(255,122,122,0.98); }
+
     @media (max-width: 760px){
       .modalBody{ grid-template-columns: 1fr; }
     }
@@ -432,6 +513,7 @@
       .title h1{ letter-spacing: 0.08em; }
       .subtitle{ letter-spacing: 0.05em; }
       .ascii{ max-height: min(42vh, 340px); }
+      .payoutPanel{ width: 100%; }
     }
 
     @media (max-height: 560px){
@@ -458,7 +540,47 @@
           </div>
           <div class="statusrow">
             <div class="pill pillBrass">LATINUM: <strong id="bankrollVal">1000</strong></div>
-            <div class="pill">PAYOUT: <strong>Q+🌀+🌀</strong>=4000× • <strong>3K</strong>=100× • <strong>2K</strong>=5×</div>
+
+            <!-- REPLACED: old PAYOUT pill -> clear payout panel -->
+            <details class="payoutPanel" open>
+              <summary class="payoutSummary">PAYOUTS (per selected slot)</summary>
+              <div class="payoutNote">
+                Each selected slot is evaluated independently. Winnings are summed.<br/>
+                <b>Net</b> = Total Winnings − Total Stake.
+              </div>
+
+              <table class="payoutTable" aria-label="Payout table">
+                <thead>
+                  <tr>
+                    <th>Outcome</th>
+                    <th>Meaning</th>
+                    <th>Multiplier</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><b>JACK</b></td>
+                    <td><span class="monoSmall">Q + 🌀 + 🌀</span> (any order)</td>
+                    <td><b>4000×</b></td>
+                  </tr>
+                  <tr>
+                    <td><b>3K</b></td>
+                    <td>Three of a kind (AAA)</td>
+                    <td><b>100×</b></td>
+                  </tr>
+                  <tr>
+                    <td><b>2K</b></td>
+                    <td>Any pair (AAB)</td>
+                    <td><b>5×</b></td>
+                  </tr>
+                  <tr>
+                    <td>—</td>
+                    <td>No match</td>
+                    <td><b>0×</b></td>
+                  </tr>
+                </tbody>
+              </table>
+            </details>
           </div>
         </div>
 
@@ -1188,40 +1310,45 @@
   }
 
   // ========= Modal content =========
+  // Updated ASCII: more readable Ferengi bartender silhouette + fallback.
   const QUARK_ASCII_BIG = String.raw`
-                       ______________________________
-                      /                              \
-             ________/   QUARK'S FRIENDLY ADVICE      \________
-            /   ____  \                                /  ____  \
-           /   /    \  \____                    ____  /  /    \  \
-          |   |  ()  |      \__________________/      |  |  ()  |  |
-          |   |      |   .----.   .----.   .----.     |  |      |  |
-          |   |  __  |  / ____ \ / ____ \ / ____ \    |  |  __  |  |
-          |   | /  \ | | |    | | |    | | |    | |   | | /  \ |  |
-          |   | \__/ | | |____| | |____| | |____| |   | | \__/ |  |
-          |   |      |  \______/ \______/ \______/    |  |      |  |
-          |   |______|     .--------------------.      |  |______|  |
-          |      __        |  LATINUM COUNTS.    |      |      __    |
-          |     /  \       |  HONOR IS OPTIONAL. |      |     /  \   |
-          |    / /\ \      '--------------------'      |    / /\ \  |
-          |   /_/  \_\      ___      ___      ___      |   /_/  \_\ |
-          |    /      \    /___\    /___\    /___\     |    /      \|
-          |   /  /\    \     |        |        |       |   /  /\    \
-          |  /__/  \____\    |        |        |       |  /__/  \____\
-          |      (  )        |        |        |       |      (  )
-          |       \/        _|_      _|_      _|_      |       \/
-          |__________________________________________________________|
+                 .-""""""-.
+              .-'  _  _   '-.
+            .'    (o)(o)     '.        ___
+           /   .-..____..-.    \     .'   '.
+          ;   /  .-====-.  \    ;   /  .-.  \
+          |   | (  .--.  ) |    |  |  /   \  |
+          |   |  \ '--' /  |    |  |  \_.-/  |
+          ;    \   '--'   /     ;   \       /
+           \     '.___.'        /     '.___.'
+            '.                 .'
+              '-._       _.-'
+                   '---'
+
+        __        __                        __        __
+     .-'  '-.  .-'  '-.                  .-'  '-.  .-'  '-.
+    /  .--.  \/  .--.  \                /  .--.  \/  .--.  \     (ears)
+   |  /    \    /    \  |              |  /    \    /    \  |
+   | |  (__)|  | (__) | |              | |  (__)|  | (__) | |
+   |  \____/    \____/  |              |  \____/    \____/  |
+    \                  /                \                  /
+     '._            _.'                  '._            _.'
+
+           .------------------------------------------------.
+           |  QUARK'S DABO COUNTER                           |
+           |  "The house always wins... unless you tip."     |
+           '------------------------------------------------'
 `;
 
   const QUARK_ASCII_COMPACT = String.raw`
-   .-------------------.
-  /  QUARK'S ADVICE     \
- |  LATINUM COUNTS.      |
- |  HONOR COSTS EXTRA.   |
-  \____     ____     ____/
-      \___/    \___/
-        (  )  (  )
-         \/    \/
+   .-""""-.
+  / o  o  \    __  __
+ |   --    | .'  ''  '.
+ |  \__/   |/  .--.   \   (ears)
+  \  ____ /|  (__) )  |
+   '-.__.-' \  '--'  /
+             '.___.-'
+ | QUARK'S BAR: TIP FIRST |
 `;
 
   const QUARK_REMARKS = {
@@ -1274,23 +1401,46 @@
     else el.spinBtn.focus();
   }
 
-  function showResultModal({ stake, won, net, bankroll }) {
-    let title, sub, remarkKey;
-    if (won > 0 && net > 0) {
-      title = (won >= stake * 1000) ? "JACKPOT RESULT" : "WIN RESULT";
-      sub = "The wheel has spoken. Quark has opinions.";
-      remarkKey = (won >= stake * 1000) ? "jackpot" : "win";
-    } else {
-      title = "LOSS RESULT";
-      sub = "The wheel has spoken. Quark has… relief.";
-      remarkKey = "loss";
-    }
+  // Clearer modal: big stat grid + meaning.
+  function showResultModal({ stake, won, net, bankroll, slotsCount, betPerSlot, bestTier }) {
+    const tierLabel =
+      bestTier ||
+      (won >= stake * 1000 ? 'JACK' : (won > 0 ? 'WIN' : 'LOSS'));
+
+    const title =
+      (tierLabel === 'JACK') ? "JACKPOT RESULT" :
+      (net > 0) ? "WIN RESULT" : "LOSS RESULT";
+
+    const sub = `Slots: ${slotsCount} • Bet/slot: ${betPerSlot} • Best hit: ${tierLabel}`;
+
+    let remarkKey;
+    if (tierLabel === 'JACK') remarkKey = 'jackpot';
+    else if (net > 0) remarkKey = 'win';
+    else remarkKey = 'loss';
 
     const summaryHTML = `
-      <div><b>Stake:</b> ${stake}</div>
-      <div><b>Winnings:</b> ${won}</div>
-      <div><b>Net:</b> ${net}</div>
-      <div><b>Bankroll:</b> ${bankroll}</div>
+      <div class="statGrid">
+        <div class="statCard">
+          <div class="statLabel">Total Stake</div>
+          <div class="statValue">${stake}</div>
+        </div>
+        <div class="statCard">
+          <div class="statLabel">Total Winnings</div>
+          <div class="statValue">${won}</div>
+        </div>
+        <div class="statCard">
+          <div class="statLabel">Net</div>
+          <div class="statValue ${net > 0 ? 'win' : (net < 0 ? 'lose' : '')}">${net}</div>
+        </div>
+        <div class="statCard">
+          <div class="statLabel">Bankroll</div>
+          <div class="statValue">${bankroll}</div>
+        </div>
+      </div>
+
+      <div class="muted">
+        Each selected slot pays independently. Total winnings are summed; net includes your stake.
+      </div>
     `;
 
     openModal({
@@ -1414,7 +1564,23 @@
 
     setSpinning(false);
 
-    showResultModal({ stake, won: totalWin, net, bankroll: state.bankroll });
+    // NEW: pass more context for the clearer modal.
+    let bestTier = '--';
+    for (const r of rows) {
+      if (r.mult === 4000) { bestTier = 'JACK'; break; }
+      if (r.mult === 100 && bestTier !== 'JACK') bestTier = '3K';
+      if (r.mult === 5 && bestTier === '--') bestTier = '2K';
+    }
+
+    showResultModal({
+      stake,
+      won: totalWin,
+      net,
+      bankroll: state.bankroll,
+      slotsCount: state.selected.length,
+      betPerSlot: bet,
+      bestTier
+    });
   }
 
   function resetAll() {
